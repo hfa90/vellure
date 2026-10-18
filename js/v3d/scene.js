@@ -54,7 +54,9 @@ export function createWorld(canvas, opts = {}) {
   const mobile = Math.min(innerWidth, innerHeight) < 700;
   const isTouch = matchMedia('(hover: none)').matches;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 1.75));
+  const DPR_MAX = Math.min(devicePixelRatio, mobile ? 1.5 : 1.5);
+  let dpr = DPR_MAX;
+  renderer.setPixelRatio(dpr);
   renderer.setSize(innerWidth, innerHeight, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
@@ -125,14 +127,14 @@ export function createWorld(canvas, opts = {}) {
   logo.add(arm1, arm2);
 
   // a joia do topo
-  const gemMat = new THREE.MeshPhysicalMaterial({ color: '#ffe3e8', metalness: 0, roughness: 0.04, transmission: 1, thickness: 0.35, ior: 2.3, iridescence: 1, iridescenceIOR: 1.7, envMapIntensity: 2.6, flatShading: true, specularIntensity: 1 });
+  const gemMat = new THREE.MeshPhysicalMaterial({ color: '#f6c3d0', metalness: 0.15, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.02, iridescence: 1, iridescenceIOR: 1.8, envMapIntensity: 2.4, flatShading: true });
   const gem = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), gemMat);
   gem.position.copy(S(50, 20)); gem.scale.setScalar(0.0001);
   logo.add(gem);
   const gemBase = new THREE.Vector3(0.105, 0.155, 0.105);
 
   /* ---------- partículas que formam a logo ---------- */
-  const N = mobile ? 4200 : 9000;
+  const N = mobile ? 3000 : 6000;
   const aStart = new Float32Array(N * 3), aTarget = new Float32Array(N * 3), aRand = new Float32Array(N * 4);
   const tmp = new THREE.Vector3(), tan = new THREE.Vector3(), nrm = new THREE.Vector3(), bin = new THREE.Vector3();
   function onTube(curve, r0, prof, t, out) {
@@ -191,16 +193,16 @@ export function createWorld(canvas, opts = {}) {
   /* =============== SEDA VIVA =============== */
   const silkU = {
     uTime: { value: 0 }, uTouch: { value: new THREE.Vector3(0, 0, 0) },
-    uRip: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0, 0, -100)) },
+    uRip: { value: Array.from({ length: 6 }, () => new THREE.Vector3(0, 0, -100)) },
     uA: { value: new THREE.Color(PALETTES.noir[0]) }, uB: { value: new THREE.Color(PALETTES.noir[1]) }, uC: { value: new THREE.Color(PALETTES.noir[2]) },
     uDim: { value: 0 }, uLight: { value: new THREE.Vector2(0.4, 0.6) }, uCam: { value: camera.position }
   };
   const silk = new THREE.Mesh(
-    new THREE.PlaneGeometry(34, 20, mobile ? 120 : 190, mobile ? 70 : 110),
+    new THREE.PlaneGeometry(34, 20, mobile ? 90 : 140, mobile ? 52 : 80),
     new THREE.ShaderMaterial({
       uniforms: silkU,
       vertexShader: NOISE + /* glsl */`
-        uniform float uTime; uniform vec3 uRip[8]; uniform vec3 uTouch;
+        uniform float uTime; uniform vec3 uRip[6]; uniform vec3 uTouch;
         varying vec3 vN; varying vec3 vW; varying vec2 vUv; varying float vH;
         float H(vec2 p){
           float t = uTime;
@@ -208,7 +210,7 @@ export function createWorld(canvas, opts = {}) {
           float h = sin(dot(p, vec2(1.7, 1.05)) + warp * 3.2 + t * .28) * .12;
           h += sin(dot(p, vec2(-.5, 1.9)) * .6 + warp * 1.6 - t * .14) * .07;
           h += snoise(vec3(p.x * .08 + 7., p.y * .1, t * .04)) * .9;
-          for (int i = 0; i < 8; i++) {
+          for (int i = 0; i < 6; i++) {
             vec3 r = uRip[i]; float age = t - r.z;
             if (age < 0. || age > 4.5) continue;
             float d = distance(p, r.xy);
@@ -377,20 +379,23 @@ export function createWorld(canvas, opts = {}) {
   composer.setPixelRatio(renderer.getPixelRatio());
   composer.setSize(innerWidth, innerHeight);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.5, 0.86);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.45, 0.5, 0.86);
   composer.addPass(bloom);
   const finish = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, uAberr: { value: 0.0025 }, uVig: { value: 0.85 } },
+    uniforms: { tDiffuse: { value: null }, uAberr: { value: 0.0025 }, uVig: { value: 0.85 }, uSeed: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
-    fragmentShader: `uniform sampler2D tDiffuse; uniform float uAberr, uVig; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float uAberr, uVig, uSeed; varying vec2 vUv;
       void main(){ vec2 c = vUv - .5; float d = length(c); vec2 o = c * uAberr * d * 4.;
         vec3 col = vec3(texture2D(tDiffuse, vUv + o).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - o).b);
-        col *= 1. - smoothstep(.3, 1.0, d) * uVig; gl_FragColor = vec4(col, 1.); }`
+        col *= 1. - smoothstep(.3, 1.0, d) * uVig;
+        float g = fract(sin(dot(vUv * 1000. + uSeed, vec2(12.9898, 78.233))) * 43758.5453) - .5; col += g * .025;
+        gl_FragColor = vec4(col, 1.); }`
   });
   composer.addPass(finish);
   composer.addPass(new OutputPass());
 
   /* =============== ENTRADA DO USUÁRIO =============== */
+  const tiltG = { x: 0, y: 0 };
   const mouse = new THREE.Vector2(0, 0), mouseS = new THREE.Vector2(0, 0), lastMouse = new THREE.Vector2();
   let mouseSpeed = 0, pointerIn = false;
   const ray = new THREE.Raycaster();
@@ -433,7 +438,7 @@ export function createWorld(canvas, opts = {}) {
 
   function update() {
     const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
-    mouseS.x = damp(mouseS.x, mouse.x, 4, dt); mouseS.y = damp(mouseS.y, mouse.y, 4, dt);
+    mouseS.x = damp(mouseS.x, mouse.x, 9, dt); mouseS.y = damp(mouseS.y, mouse.y, 9, dt);
     mouseSpeed = damp(mouseSpeed, lastMouse.distanceTo(mouse) / Math.max(dt, 1e-3), 6, dt); lastMouse.copy(mouse);
 
     /* câmera */
@@ -451,8 +456,8 @@ export function createWorld(canvas, opts = {}) {
       const portrait = innerWidth / innerHeight < 0.8 ? 0.78 : 1;
       logo.scale.setScalar(params.logoScale * portrait * (0.55 + 0.45 * lv));
       logo.position.y = params.logoY + Math.sin(t * 0.8) * 0.035 * params.ready;
-      logo.rotation.y = damp(logo.rotation.y, mouseS.x * 0.42 + spin.a + params.logoSpin + Math.sin(t * 0.35) * 0.06, 5, dt);
-      logo.rotation.x = damp(logo.rotation.x, -mouseS.y * 0.26, 5, dt);
+      logo.rotation.y = damp(logo.rotation.y, mouseS.x * 0.42 + spin.a + params.logoSpin + Math.sin(t * 0.35) * 0.06 + tiltG.x, 8, dt);
+      logo.rotation.x = damp(logo.rotation.x, -mouseS.y * 0.26 + tiltG.y, 8, dt);
       const p = params.loadP;
       pMat.uniforms.uP.value = smooth(0, 0.9, p) * 1.0;
       pMat.uniforms.uTime.value = t;
@@ -486,7 +491,7 @@ export function createWorld(canvas, opts = {}) {
         tch.x = damp(tch.x, local.x, 10, dt); tch.y = damp(tch.y, local.y, 10, dt);
         tch.z = damp(tch.z, pointerIn ? clamp(mouseSpeed * 0.25, 0, 1) * (0.4 + params.touch) : 0, 3, dt);
         if (pointerIn && mouseSpeed > 0.4 && lastRip.distanceTo(local) > (0.9 - params.touch * 0.4)) {
-          silkU.uRip.value[ripI].set(local.x, local.y, t); ripI = (ripI + 1) % 8; lastRip.set(local.x, local.y);
+          silkU.uRip.value[ripI].set(local.x, local.y, t); ripI = (ripI + 1) % 6; lastRip.set(local.x, local.y);
         }
       }
       const w = palette.w; let sa = 0;
@@ -561,18 +566,29 @@ export function createWorld(canvas, opts = {}) {
     } else if (gal.hovered !== -1) { gal.hovered = -1; handlers.hover(null); }
 
     bloom.strength = params.bloom;
-    finish.uniforms.uAberr.value = params.aberr;
+    finish.uniforms.uAberr.value = params.aberr; finish.uniforms.uSeed.value = (t * 60 | 0) % 97;
     composer.render();
   }
   const PAL = Object.fromEntries(Object.entries(PALETTES).map(([k, v]) => [k, v.map((c) => new THREE.Color(c))]));
 
-  function loop() { if (!running) return; update(); requestAnimationFrame(loop); }
+  let acc = 0, frames = 0, lastNow = performance.now(), slowStreak = 0;
+  function adapt() {
+    const now = performance.now(); acc += now - lastNow; lastNow = now; frames++;
+    if (frames < 45) return;
+    const avg = acc / frames; acc = 0; frames = 0;
+    if (avg > 24 && dpr > 0.75) { dpr = Math.max(0.75, dpr - 0.25); slowStreak++; }
+    else if (avg < 14 && dpr < DPR_MAX) dpr = Math.min(DPR_MAX, dpr + 0.25);
+    else return;
+    renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); composer.setSize(innerWidth, innerHeight);
+    if (slowStreak > 3) bloom.enabled = false;
+  }
+  function loop() { if (!running) return; update(); adapt(); requestAnimationFrame(loop); }
   requestAnimationFrame(loop);
   document.addEventListener('visibilitychange', () => { if (document.hidden) { running = false; } else if (!running) { running = true; clock.getDelta(); requestAnimationFrame(loop); } });
 
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight; params.fov = camera.aspect < 0.8 ? 54 : 42; camera.fov = params.fov; camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); bloom.setSize(innerWidth, innerHeight);
+    renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); bloom.setSize(innerWidth / 2, innerHeight / 2);
   });
 
   return {
@@ -580,6 +596,7 @@ export function createWorld(canvas, opts = {}) {
     loadTextures, loadSecond, setGallery,
     setPalette(w) { palette.w = w; },
     on(ev, fn) { handlers[ev] = fn; },
+    tilt(x, y) { tiltG.x = x; tiltG.y = y; },
     get dragging() { return !!(drag && drag.moved); }
   };
 }

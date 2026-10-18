@@ -8,8 +8,15 @@
   <meta name="theme-color" content="#140a10">
   <meta property="og:title" content="Vellure — Maison de Lingerie">
   <meta property="og:description" content="Entre na Maison. Lingerie, corsets, moda praia e fitness.">
-  <meta property="og:image" content="assets/modelos/conjunto-ana-clara-503-vermelho-1.jpg">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23140a10'/%3E%3Cpath d='M26 28 C36 30 40 42 46 58 C48 66 50 74 50 78 M74 28 C64 30 60 42 54 58 C52 66 50 74 50 78' stroke='%23d8bd88' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <meta property="og:image" content="https://hfa90.github.io/vellure/assets/og.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Vellure">
+  <meta name="format-detection" content="telephone=no">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
@@ -46,6 +53,7 @@
     </a>
     <div class="nav-tools">
       <button class="nav-sound" id="soundBtn" type="button" aria-pressed="false" aria-label="Ligar som ambiente"><span class="eq"><i></i><i></i><i></i><i></i></span><span class="lbl">Som</span></button>
+      <a class="nav-acct" href="conta.html" aria-label="Minha conta"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.5 20c1.4-3.8 4.2-5.6 7.5-5.6s6.1 1.8 7.5 5.6"/></svg><span class="lbl" id="acctLbl">Entrar</span></a>
       <button class="nav-bag" id="bagBtn" type="button" aria-label="Abrir sacola"><span class="lbl">Sacola</span><span class="count" id="bagCount">0</span></button>
     </div>
   </header>
@@ -61,6 +69,8 @@
     </ul>
     <div class="menu-foot">
       <a href="#" data-wa="Olá, Vellure! Quero falar com a concierge.">Falar com a concierge</a>
+      <a href="conta.html">Minha conta</a>
+      <button type="button" id="installBtn" hidden>Instalar o app</button>
       <a href="admin.html">Painel da Maison</a>
     </div>
   </nav>
@@ -120,6 +130,18 @@
       <div class="vs-grid" id="grid"></div>
     </section>
 
+    <section id="atelier" class="atelier" aria-label="Ateliê de medidas e frete">
+      <header class="at-head">
+        <h2 class="at-title">Ateliê de medidas</h2>
+        <p>Deslize as fitas e veja o manequim tomar a sua forma. O tamanho certo de sutiã, calcinha e corset aparece na hora.</p>
+      </header>
+      <div id="sizer"></div>
+      <div class="at-frete">
+        <h3>Quanto custa para chegar até você</h3>
+        <div id="frete"></div>
+      </div>
+    </section>
+
     <section class="promessa" aria-label="Como compramos com você">
       <p>Pague no Pix com <em>5% de desconto</em>, troque em até <em>30 dias</em> e fale com uma pessoa de verdade pelo <em>WhatsApp</em> do primeiro clique à entrega.</p>
     </section>
@@ -134,6 +156,7 @@
       <div class="foot-bottom">
         <span>© 2026 Vellure Maison de Lingerie</span>
         <a href="#" data-wa="Olá, Vellure! Quero falar com a concierge.">WhatsApp</a>
+        <a href="conta.html">Minha conta</a>
         <a href="admin.html">Painel</a>
       </div>
     </footer>
@@ -151,8 +174,8 @@
       <h2 class="pdp-name" id="pdpName"></h2>
       <p class="pdp-color" id="pdpColor"></p>
       <p class="pdp-price"><span id="pdpPrice"></span><small id="pdpPix"></small></p>
-      <fieldset class="pdp-sizes"><legend>Tamanho</legend><div id="pdpSizes"></div></fieldset>
-      <button class="btn-gold" id="pdpAdd" type="button">Colocar na sacola</button>
+      <fieldset class="pdp-sizes"><legend>Tamanho <button type="button" class="pdp-sizer" id="pdpSizer">Descobrir meu tamanho</button></legend><div id="pdpSizes"></div><p class="pdp-mine" id="pdpMine" hidden></p></fieldset>
+      <div class="pdp-buy"><button class="btn-gold" id="pdpAdd" type="button">Colocar na sacola</button><button class="fav" id="pdpFav" type="button" aria-pressed="false" aria-label="Favoritar"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9.2C1.6 7.2 4 4 7.2 4c2 0 3.5 1.1 4.8 2.8C13.3 5.1 14.8 4 16.8 4 20 4 22.4 7.2 21 10.8 19 15.6 12 20 12 20z"/></svg></button></div>
       <button class="btn-line" id="pdpWa" type="button">Tirar dúvidas no WhatsApp</button>
       <p class="pdp-note">Troca em até 30 dias. Envio para todo o Brasil.</p>
       <div class="pdp-more"><h3>Combina com</h3><div id="pdpMore"></div></div>
@@ -167,6 +190,10 @@
   </aside>
   <div class="scrim" aria-hidden="true"></div>
 
+  <div id="szModal" class="sheet" role="dialog" aria-modal="true" aria-label="Descobrir meu tamanho" aria-hidden="true">
+    <div class="sheet-box"><button class="sheet-close" type="button">Fechar</button><h2>Seu tamanho em segundos</h2><div id="szModalBody"></div></div>
+  </div>
+
   <div class="toast" id="toast" role="status"></div>
   <div class="cursor" aria-hidden="true"><i class="c-dot"></i><i class="c-ring"><span class="c-lbl"></span></i></div>
 
@@ -177,5 +204,6 @@
   <script src="js/data.js"></script>
   <script src="js/catalog.js"></script>
   <script type="module" src="js/v3d/main.js"></script>
+  <script>if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 </body>
 </html>

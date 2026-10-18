@@ -5,6 +5,8 @@
 import { createWorld, hasWebGL } from './scene.js';
 import { createShop, toast, waLink, money, CAT_NAME } from './shop.js';
 import { sound } from './sound.js';
+import { mountSizer, mountFrete } from './atelier.js';
+import { currentUser, favs, haptic } from './common.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -40,7 +42,7 @@ async function getCatalog() {
 let lenis = null;
 function setupScroll() {
   if (REDUCED || !window.Lenis) return;
-  lenis = new Lenis({ lerp: 0.085, smoothWheel: true, wheelMultiplier: 0.9, touchMultiplier: 1.4 });
+  lenis = new Lenis({ lerp: 0.14, smoothWheel: true, wheelMultiplier: 1, touchMultiplier: 1.2 });
   const raf = (t) => { lenis.raf(t); requestAnimationFrame(raf); };
   requestAnimationFrame(raf);
 }
@@ -61,7 +63,8 @@ function setupCursor() {
   const c = $('.cursor'), dot = $('.c-dot'), ring = $('.c-ring'), lbl = $('.c-lbl');
   let x = innerWidth / 2, y = innerHeight / 2, rx = x, ry = y;
   addEventListener('pointermove', (e) => { x = e.clientX; y = e.clientY; }, { passive: true });
-  (function tick() { rx = lerp(rx, x, 0.18); ry = lerp(ry, y, 0.18); dot.style.transform = `translate(${x}px,${y}px)`; ring.style.transform = `translate(${rx}px,${ry}px)`; requestAnimationFrame(tick); })();
+  addEventListener('pointermove', (e) => { dot.style.transform = `translate3d(${e.clientX}px,${e.clientY}px,0)`; }, { passive: true });
+  (function tick() { rx = lerp(rx, x, 0.35); ry = lerp(ry, y, 0.35); ring.style.transform = `translate3d(${rx}px,${ry}px,0)`; requestAnimationFrame(tick); })();
   document.addEventListener('pointerover', (e) => { if (e.target.closest('a, button, input, .card-media, [role="button"]')) c.classList.add('hover'); });
   document.addEventListener('pointerout', (e) => { if (e.target.closest('a, button, input, .card-media, [role="button"]')) c.classList.remove('hover'); });
   return { label(t) { lbl.textContent = t || ''; c.classList.toggle('label', !!t); } };
@@ -71,21 +74,38 @@ function setupCursor() {
 function setupHeroLetters() {
   const letters = $$('.hero-word span');
   if (!HOVER || REDUCED) return;
-  let mx = -1e4, my = -1e4, raf = 0;
+  let centers = [], mx = -1e4, my = -1e4, raf = 0;
+  const measure = () => { letters.forEach((l) => (l.style.transform = '')); centers = letters.map((l) => { const r = l.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2 + scrollY]; }); };
+  measure(); setTimeout(measure, 2400); addEventListener('resize', measure);
   addEventListener('pointermove', (e) => { mx = e.clientX; my = e.clientY; if (!raf) raf = requestAnimationFrame(apply); }, { passive: true });
   function apply() {
     raf = 0;
-    letters.forEach((l) => {
-      const r = l.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-      const dx = (mx - cx) / innerWidth, dy = (my - cy) / innerHeight; const d = Math.hypot(dx, dy);
+    if (scrollY > innerHeight) return;
+    letters.forEach((l, i) => {
+      const dx = (mx - centers[i][0]) / innerWidth, dy = (my - (centers[i][1] - scrollY)) / innerHeight; const d = Math.hypot(dx, dy);
       const f = Math.max(0, 1 - d * 3.2);
-      l.style.transform = `translate3d(${-dx * 26 * f}px, ${-dy * 30 * f}px, ${f * 90}px) rotateY(${dx * 38 * f}deg) rotateX(${-dy * 30 * f}deg)`;
+      l.style.transform = f ? `translate3d(${-dx * 26 * f}px, ${-dy * 30 * f}px, ${f * 90}px) rotateY(${dx * 38 * f}deg) rotateX(${-dy * 30 * f}deg)` : '';
     });
   }
 }
 function splitWords(el) {
   el.innerHTML = el.textContent.trim().split(/\s+/).map((w) => `<span class="w">${w}</span>`).join(' ');
   return $$('.w', el);
+}
+
+/* ---------------- giroscópio: a joia acompanha o celular ---------------- */
+let tiltTarget = null;
+function startTilt() {
+  if (HOVER || !window.DeviceOrientationEvent) return;
+  const listen = () => addEventListener('deviceorientation', (e) => {
+    if (e.gamma == null) return;
+    const x = Math.max(-1, Math.min(1, e.gamma / 35)), y = Math.max(-1, Math.min(1, ((e.beta || 45) - 45) / 35));
+    tiltTarget && tiltTarget.tilt(x * 0.5, y * 0.3);
+  });
+  try {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') DeviceOrientationEvent.requestPermission().then((r) => r === 'granted' && listen()).catch(() => {});
+    else listen();
+  } catch (e) { /* sem sensor */ }
 }
 
 /* ======================================================================= */
@@ -99,11 +119,21 @@ async function boot() {
   const enterScale = { v: 1 };
 
   const shop = createShop({ catalog, lock, unlock, chime: (p) => sound.chime(p) });
+  mountSizer($('#sizer'), { onSave: async (m) => { try { if (window.V?.state?.user) await window.V.api.updateProfile({ measurements: m }); } catch (e) { /* fica no aparelho */ } } });
+  mountFrete($('#frete'));
+  currentUser().then(async (u) => {
+    if (!u) return;
+    let name = u.user_metadata?.full_name || '';
+    try { const p = await window.V.api.profile(); name = p?.full_name || name; } catch (e) { /* */ }
+    $('#acctLbl').textContent = name ? `Olá, ${name.split(' ')[0]}` : 'Minha conta';
+    favs.sync();
+  });
 
   if (gl) {
     try { world = createWorld($('#gl')); } catch (e) { console.warn('[Vellure] WebGL indisponível', e); world = null; }
   }
   if (!world) document.body.classList.add('no-gl');
+  tiltTarget = world;
 
   /* ---------- LOADING ---------- */
   const tl0 = gsap.timeline();
@@ -147,7 +177,7 @@ async function boot() {
   $('#ldHint').textContent = HOVER ? 'Arraste a joia para girá-la. Clique em entrar quando quiser.' : 'Toque em entrar.';
 
   await new Promise((res) => {
-    const enter = () => { removeEventListener('keydown', key); res(); };
+    const enter = () => { removeEventListener('keydown', key); haptic(25); startTilt(); res(); };
     const key = (e) => { if (e.key === 'Enter') enter(); };
     btn.addEventListener('click', enter, { once: true });
     addEventListener('keydown', key);
@@ -196,7 +226,7 @@ async function boot() {
   const galerie = $('#galerie');
   let galItems = catalog;
   const PER = MOBILE ? 70 : 90;
-  function sizeGallery() { galerie.style.height = `${galItems.length * PER + innerHeight}px`; }
+  function sizeGallery() { galerie.style.height = `${galItems.length * PER + innerHeight}px`; window.__vellureMeasure && window.__vellureMeasure(); }
   function setGal(f) {
     galItems = f === 'all' ? catalog : catalog.filter((p) => p.cat === f);
     if (world) world.setGallery(galItems);
@@ -237,11 +267,14 @@ async function boot() {
   /* ---------- diretor: a rolagem conduz a cena ---------- */
   const secs = { hero: $('#inicio'), man: $('#manifesto'), gal: galerie, seda: $('#seda'), vs: $('#vestiaire') };
   const bar = $('#glBar');
-  let lit = -1;
+  let lit = -1, box = {};
+  const measureSecs = () => { const y = scrollY; for (const k in secs) { const r = secs[k].getBoundingClientRect(); box[k] = { top: r.top + y, height: r.height }; } };
+  measureSecs(); addEventListener('resize', () => setTimeout(measureSecs, 50)); window.__vellureMeasure = measureSecs;
+  setInterval(measureSecs, 2000);
   (function direct() {
-    const vh = innerHeight;
-    const r = (el) => el.getBoundingClientRect();
-    const hero = r(secs.hero), man = r(secs.man), g = r(secs.gal), sd = r(secs.seda), vs = r(secs.vs);
+    const vh = innerHeight, sy = lenis ? lenis.scroll : scrollY;
+    const r = (k) => { const b = box[k]; const top = b.top - sy; return { top, height: b.height, bottom: top + b.height }; };
+    const hero = r('hero'), man = r('man'), g = r('gal'), sd = r('seda'), vs = r('vs');
     const heroOut = clamp(-hero.top / vh, 0, 1);
     const pMan = clamp((vh - man.top) / (man.height + vh), 0, 1);
     const gIn = clamp((vh * 0.8 - g.top) / (vh * 0.8), 0, 1), gOut = clamp((g.bottom - vh * 0.2) / (vh * 0.8), 0, 1);
@@ -324,6 +357,18 @@ async function boot() {
   if (m) setTimeout(() => shop.open(decodeURIComponent(m[1]), false), 600);
 
   addEventListener('resize', sizeGallery);
+
+  /* ---------- instalar como app (Android e iPhone) ---------- */
+  const ib = $('#installBtn');
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let deferred = null;
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; ib.hidden = false; });
+  if (ios && !standalone) ib.hidden = false;
+  ib.addEventListener('click', async () => {
+    if (deferred) { deferred.prompt(); await deferred.userChoice; deferred = null; ib.hidden = true; }
+    else toast('No Safari, toque em Compartilhar e depois em “Adicionar à Tela de Início”.');
+  });
 }
 
 boot();

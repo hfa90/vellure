@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Minha conta — Vellure</title>
+  <meta name="description" content="Acompanhe seus pedidos, favoritos e medidas na Maison Vellure.">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#140a10">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Vellure">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/v3d.css">
+  <link rel="stylesheet" href="css/conta.css">
+  <script type="importmap">
+    { "imports": { "three": "./assets/vendor/three.module.js", "three/addons/": "./assets/vendor/jsm/" } }
+  </script>
+</head>
+<body class="conta is-in">
+  <canvas id="gl" aria-hidden="true"></canvas>
+
+  <header class="nav ct-nav">
+    <a class="nav-menu" href="index.html"><span class="lines"><i></i><i></i></span><span class="lbl">Voltar à loja</span></a>
+    <a class="nav-brand" href="index.html" aria-label="Vellure, início">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="ng" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ecd3a2"/><stop offset="1" stop-color="#a07a42"/></linearGradient></defs><circle cx="50" cy="50" r="46" fill="none" stroke="url(#ng)" stroke-width="2"/><path d="M24 26 C34 28 38 40 44 56 C47 64 49 72 50 78" fill="none" stroke="url(#ng)" stroke-width="5" stroke-linecap="round"/><path d="M76 26 C66 28 62 40 56 56 C53 64 51 72 50 78" fill="none" stroke="url(#ng)" stroke-width="2.4" stroke-linecap="round"/><path d="M50 12 L55 20 L50 28 L45 20 Z" fill="url(#ng)"/></svg>
+      <span>VELLURE</span>
+    </a>
+    <div class="nav-tools"><button class="btn-text" id="outBtn" type="button" hidden>Sair</button></div>
+  </header>
+
+  <main id="ct" class="ct" aria-live="polite">
+    <div class="ct-loading"><span></span></div>
+  </main>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="assets/vendor/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/catalog.js"></script>
+  <script type="module" src="js/v3d/conta.js"></script>
+  <script>if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
+</body>
+</html>

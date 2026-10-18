@@ -1,38 +1,22 @@
 /* =====================================================================
-   VELLURE 3D · loja: closet, página da peça, sacola e WhatsApp
+   VELLURE 3D · loja: closet, página da peça, favoritos, sacola e pedido
    ===================================================================== */
-const C = window.VELLURE_CONFIG || {};
-const $ = (s, r = document) => r.querySelector(s);
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-export const money = (n) => (+n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-export const CAT_NAME = { lingerie: 'Lingerie', corset: 'Corsets', praia: 'Moda praia', fitness: 'Fitness' };
-const PIX = 0.05;
+import { $, $$, esc, money, CAT_NAME, PIX, HEART, waLink, toast, haptic, local, favs } from './common.js';
+import { mountSizer, mountFrete, loadMeasures, sizeCalc } from './atelier.js';
+export { money, CAT_NAME, waLink, toast };
 
-export function waLink(text) {
-  const n = String(C.WHATSAPP || '').replace(/\D/g, '');
-  return `https://wa.me/${n}?text=${encodeURIComponent(text)}`;
-}
-
-let toastT;
-export function toast(msg) {
-  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2800);
-}
-
-const store = {
-  get() { try { return JSON.parse(localStorage.getItem('vellure_sacola') || '[]'); } catch (e) { return mem; } },
-  set(v) { mem = v; try { localStorage.setItem('vellure_sacola', JSON.stringify(v)); } catch (e) { /* modo privado */ } }
-};
-let mem = [];
+const FIELDS = [['nome', 'Nome completo', 'name'], ['fone', 'WhatsApp', 'tel'], ['cep', 'CEP', 'postal-code'], ['rua', 'Rua', 'address-line1'], ['numero', 'Número', ''], ['comp', 'Complemento', 'address-line2'], ['bairro', 'Bairro', ''], ['cidade', 'Cidade', 'address-level2'], ['uf', 'UF', 'address-level1']];
 
 export function createShop({ catalog, lock, unlock, chime }) {
   const bySlug = new Map(catalog.map((p) => [p.slug, p]));
-  let bag = store.get().filter((x) => bySlug.has(x.slug));
-  let current = null, size = null, imgI = 0;
+  let bag = local.get('vellure_sacola', []).filter((x) => bySlug.has(x.slug));
+  let current = null, size = null, imgI = 0, view = 'list', ship = null;
 
   /* ---------------- closet (grade) ---------------- */
   const grid = $('#grid');
-  function renderGrid(filter = 'all') {
+  let gridFilter = 'all';
+  function renderGrid(filter = gridFilter) {
+    gridFilter = filter;
     const list = catalog.filter((p) => filter === 'all' || p.cat === filter);
     grid.innerHTML = list.length ? list.map((p) => `
       <article class="card" data-slug="${esc(p.slug)}">
@@ -41,13 +25,18 @@ export function createShop({ catalog, lock, unlock, chime }) {
           ${p.imgs[1] ? `<img class="b" src="${esc(p.imgs[1])}" alt="" loading="lazy" decoding="async">` : ''}
           <button class="card-add" type="button">Ver tamanhos</button>
         </div>
+        <button class="fav card-fav" type="button" aria-pressed="${favs.has(p.slug)}" aria-label="Favoritar ${esc(p.name)}">${HEART}</button>
         <div class="card-info"><h3 class="card-name">${esc(p.name)}<span class="card-color">${esc(p.color || CAT_NAME[p.cat])}</span></h3><span class="card-price">${money(p.price)}</span></div>
       </article>`).join('') : '<p class="vs-empty">Nenhuma peça nesta categoria por enquanto.</p>';
     if (window.gsap && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      gsap.fromTo(grid.children, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 1, stagger: 0.04, ease: 'expo.out' });
+      gsap.fromTo(grid.children, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 1, stagger: 0.035, ease: 'expo.out' });
     }
   }
-  grid.addEventListener('click', (e) => { const c = e.target.closest('.card'); if (c) open(c.dataset.slug); });
+  grid.addEventListener('click', async (e) => {
+    const f = e.target.closest('.card-fav');
+    if (f) { const on = await favs.toggle(f.closest('.card').dataset.slug); f.setAttribute('aria-pressed', String(on)); haptic(); toast(on ? 'Guardada nos seus favoritos.' : 'Removida dos favoritos.'); return; }
+    const c = e.target.closest('.card'); if (c) open(c.dataset.slug);
+  });
   grid.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('card-media')) { e.preventDefault(); open(e.target.closest('.card').dataset.slug); } });
   if (matchMedia('(hover: hover)').matches) {
     grid.addEventListener('pointermove', (e) => {
@@ -57,6 +46,22 @@ export function createShop({ catalog, lock, unlock, chime }) {
       m.style.transform = `rotateY(${(x - 0.5) * 10}deg) rotateX(${(0.5 - y) * 8}deg) translateZ(10px)`;
     });
     grid.addEventListener('pointerout', (e) => { const m = e.target.closest('.card-media'); if (m && !m.contains(e.relatedTarget)) m.style.transform = ''; });
+  }
+  favs.on(() => { $$('.card-fav', grid).forEach((b) => b.setAttribute('aria-pressed', String(favs.has(b.closest('.card').dataset.slug)))); if (current) $('#pdpFav').setAttribute('aria-pressed', String(favs.has(current.slug))); });
+
+  /* ---------------- tamanho sugerido ---------------- */
+  function suggest(p, res) {
+    if (!res) { const m = loadMeasures(); if (!m) return null; res = sizeCalc(m); }
+    const want = p.cat === 'corset' ? res.body : res.panty;
+    if (p.sizes.includes(want)) return want;
+    const order = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'], wi = order.indexOf(want);
+    return p.sizes.slice().sort((a, b) => Math.abs(order.indexOf(a) - wi) - Math.abs(order.indexOf(b) - wi))[0];
+  }
+  function paintSizes() {
+    $('#pdpSizes').innerHTML = current.sizes.map((s) => `<button type="button" aria-pressed="${s === size}">${esc(s)}</button>`).join('');
+    const mine = suggest(current);
+    const el = $('#pdpMine');
+    if (mine && current.sizes.length > 1) { el.hidden = false; el.innerHTML = `Pelas suas medidas, o seu é o <b>${esc(mine)}</b>.`; } else el.hidden = true;
   }
 
   /* ---------------- página da peça ---------------- */
@@ -75,15 +80,16 @@ export function createShop({ catalog, lock, unlock, chime }) {
     $('#pdpColor').textContent = p.color || '';
     $('#pdpPrice').textContent = money(p.price);
     $('#pdpPix').textContent = `${money(p.price * (1 - PIX))} no Pix`;
+    $('#pdpFav').setAttribute('aria-pressed', String(favs.has(p.slug)));
+    $('#pdpSizer').hidden = p.sizes.length < 2;
     stage.innerHTML = p.imgs.map((src, i) => `<img src="${esc(src)}" alt="${esc(p.name)}, foto ${i + 1}" ${i ? 'loading="lazy"' : ''}>`).join('');
     thumbs.innerHTML = p.imgs.length > 1 ? p.imgs.map((src, i) => `<button type="button" aria-label="Foto ${i + 1}"><img src="${esc(src)}" alt="" loading="lazy"></button>`).join('') : '';
-    $('#pdpSizes').innerHTML = p.sizes.map((s) => `<button type="button" aria-pressed="${s === size}">${esc(s)}</button>`).join('');
+    paintSizes();
     const more = catalog.filter((x) => x.cat === p.cat && x.slug !== p.slug).sort(() => Math.random() - 0.5).slice(0, 3);
     $('#pdpMore').innerHTML = more.map((x) => `<button type="button" data-slug="${esc(x.slug)}"><img src="${esc(x.imgs[0])}" alt="" loading="lazy"><span>${esc(x.name)}<br>${money(x.price)}</span></button>`).join('');
     setImg(0);
-    pdp.classList.add('open'); pdp.setAttribute('aria-hidden', 'false');
+    if (!pdp.classList.contains('open')) { pdp.classList.add('open'); pdp.setAttribute('aria-hidden', 'false'); lock(); }
     $('.pdp-info').scrollTop = 0; pdp.scrollTop = 0;
-    lock();
     if (window.gsap) {
       gsap.fromTo(stage.querySelector('img.cur'), { clipPath: 'inset(12% 18% 12% 18% round 200px 200px 8px 8px)', scale: 1.15 }, { clipPath: 'inset(0% 0% 0% 0% round 0px)', scale: 1, duration: 1.3, ease: 'expo.out', clearProps: 'clipPath,scale' });
       gsap.fromTo('.pdp-info > *', { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.9, stagger: 0.05, ease: 'expo.out', delay: 0.15 });
@@ -106,10 +112,11 @@ export function createShop({ catalog, lock, unlock, chime }) {
   stage.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; }, { passive: true });
   stage.addEventListener('touchend', (e) => { if (sx === null) return; const dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 40) setImg(imgI + (dx < 0 ? 1 : -1)); sx = null; });
   $('#pdpSizes').addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return; size = b.textContent;
+    const b = e.target.closest('button'); if (!b) return; size = b.textContent; haptic(8);
     $('#pdpSizes').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   });
   $('#pdpMore').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) open(b.dataset.slug, false); });
+  $('#pdpFav').addEventListener('click', async (e) => { const on = await favs.toggle(current.slug); e.currentTarget.setAttribute('aria-pressed', String(on)); haptic(); toast(on ? 'Guardada nos seus favoritos.' : 'Removida dos favoritos.'); });
   $('#pdpAdd').addEventListener('click', () => {
     if (!size) {
       toast('Escolha um tamanho para continuar.');
@@ -124,59 +131,154 @@ export function createShop({ catalog, lock, unlock, chime }) {
     if (m) open(decodeURIComponent(m[1]), false); else close(true);
   });
 
+  /* ---------------- “descobrir meu tamanho” ---------------- */
+  const sheet = $('#szModal');
+  let sheetSizer = null;
+  function openSheet() {
+    if (!sheetSizer) sheetSizer = mountSizer($('#szModalBody'), {
+      compact: true,
+      onApply: (res) => { const s = suggest(current, res); if (s) { size = s; paintSizes(); toast(`Tamanho ${s} selecionado.`); } closeSheet(); }
+    });
+    else { const m = loadMeasures(); if (m) sheetSizer.set(m); }
+    sheet.classList.add('open'); sheet.setAttribute('aria-hidden', 'false');
+  }
+  function closeSheet() { sheet.classList.remove('open'); sheet.setAttribute('aria-hidden', 'true'); if (current) paintSizes(); }
+  $('#pdpSizer').addEventListener('click', openSheet);
+  $('.sheet-close').addEventListener('click', closeSheet);
+  sheet.addEventListener('click', (e) => { if (e.target === sheet) closeSheet(); });
+
   /* ---------------- sacola ---------------- */
   const bagEl = $('#bag'), scrim = $('.scrim');
-  function save() { store.set(bag); $('#bagCount').textContent = bag.reduce((a, x) => a + x.qty, 0); }
+  function save() { local.set('vellure_sacola', bag); $('#bagCount').textContent = bag.reduce((a, x) => a + x.qty, 0); }
   function add(slug, sz) {
     const it = bag.find((x) => x.slug === slug && x.size === sz);
     if (it) it.qty++; else bag.push({ slug, size: sz, qty: 1 });
     save(); renderBag();
     const b = $('#bagBtn'); b.classList.add('bump'); setTimeout(() => b.classList.remove('bump'), 500);
-    toast('Peça colocada na sacola.');
+    toast('Peça colocada na sacola.'); haptic(18);
     chime && chime(1.5);
   }
-  function totals() { const sub = bag.reduce((a, x) => a + bySlug.get(x.slug).price * x.qty, 0); return { sub, pix: sub * (1 - PIX) }; }
+  const subtotal = () => bag.reduce((a, x) => a + bySlug.get(x.slug).price * x.qty, 0);
+  function totals(pay = 'pix') {
+    const sub = subtotal(), fr = ship ? ship.price : 0;
+    const disc = pay === 'pix' ? sub * PIX : 0;
+    return { sub, fr, disc, total: sub - disc + fr };
+  }
+  const itemsHTML = () => bag.map((x, i) => {
+    const p = bySlug.get(x.slug);
+    return `<div class="bag-item" data-i="${i}"><img src="${esc(p.imgs[0])}" alt=""><div><h3>${esc(p.name)}</h3><p>${esc(p.color ? p.color + ', ' : '')}tamanho ${esc(x.size)}</p>
+      <div class="qty"><button type="button" data-q="-1" aria-label="Diminuir">−</button><span>${x.qty}</span><button type="button" data-q="1" aria-label="Aumentar">+</button></div></div>
+      <div class="bag-side"><button class="rm" type="button">Remover</button><span class="pr">${money(p.price * x.qty)}</span></div></div>`;
+  }).join('');
+  let freteBox = null;
   function renderBag() {
     const items = $('#bagItems'), foot = $('#bagFoot');
+    $('#bag h2').textContent = view === 'checkout' ? 'Finalizar pedido' : view === 'done' ? 'Pedido feito' : 'Sua sacola';
+    if (view === 'done') return;
     if (!bag.length) {
+      view = 'list';
       items.innerHTML = '<div class="bag-empty"><strong>Sua sacola está vazia.</strong>Escolha uma peça na galeria ou no closet e ela aparece aqui.</div>';
       foot.innerHTML = '<button class="btn-line" type="button" data-go="#vestiaire">Ver o closet</button>';
-      return;
+      freteBox = null; return;
     }
-    items.innerHTML = bag.map((x, i) => {
-      const p = bySlug.get(x.slug);
-      return `<div class="bag-item" data-i="${i}"><img src="${esc(p.imgs[0])}" alt=""><div><h3>${esc(p.name)}</h3><p>${esc(p.color ? p.color + ', ' : '')}tamanho ${esc(x.size)}</p>
-        <div class="qty"><button type="button" data-q="-1" aria-label="Diminuir">−</button><span>${x.qty}</span><button type="button" data-q="1" aria-label="Aumentar">+</button></div></div>
-        <div style="display:grid;gap:10px;justify-items:end"><button class="rm" type="button">Remover</button><span class="pr">${money(p.price * x.qty)}</span></div></div>`;
-    }).join('');
-    const t = totals();
-    foot.innerHTML = `<div class="row"><span>Subtotal</span><span>${money(t.sub)}</span></div>
-      <div class="row pix"><span>No Pix, com 5% de desconto</span><span>${money(t.pix)}</span></div>
-      <button class="btn-gold" type="button" id="checkout">Finalizar pelo WhatsApp</button>
-      <p class="fine">A concierge confirma tamanho, frete e envia o link de pagamento na conversa.</p>`;
+    if (view === 'checkout') return renderCheckout();
+    items.innerHTML = itemsHTML() + '<div class="bag-frete"><h4>Frete</h4><div id="bagFrete"></div></div>';
+    freteBox = mountFrete($('#bagFrete'), { compact: true, subtotal, onChoose: (o) => { ship = o; paintTotals(); } });
+    paintTotals();
   }
+  function paintTotals() {
+    if (view !== 'list') return;
+    const t = totals();
+    $('#bagFoot').innerHTML = `<div class="row"><span>Subtotal</span><span>${money(t.sub)}</span></div>
+      <div class="row"><span>Frete</span><span>${ship ? (ship.price ? money(ship.price) : 'Cortesia') : 'Informe o CEP'}</span></div>
+      <div class="row pix"><span>Total no Pix, com 5% off</span><span>${money(t.total)}</span></div>
+      <button class="btn-gold" type="button" id="toCheckout">Finalizar pedido</button>`;
+  }
+  async function renderCheckout() {
+    const user = window.V?.state?.user;
+    const a = ship?.addr || {};
+    let saved = {};
+    try { if (user) { const list = await window.V.api.addresses(); if (list?.length) saved = list[0]; } } catch (e) { /* sem endereços */ }
+    const prof = (user && window.V.state.profile) || {};
+    const val = { nome: prof.full_name || user?.user_metadata?.full_name || '', fone: prof.phone || '', cep: (ship?.cep || saved.cep || ''), rua: a.logradouro || saved.street || '', numero: saved.number || '', comp: saved.complement || '', bairro: a.bairro || saved.district || '', cidade: a.localidade || saved.city || '', uf: a.uf || saved.state || '' };
+    $('#bagItems').innerHTML = `
+      ${user ? '' : `<div class="co-login"><p>Entre na sua conta para acompanhar este pedido, com status e rastreio.</p><a class="btn-line" href="conta.html?volta=sacola">Entrar ou criar conta</a></div>`}
+      <form class="co-form" id="coForm" novalidate>
+        ${FIELDS.map(([k, l, ac]) => `<label class="co-f co-${k}"><span>${l}</span><input name="${k}" value="${esc(val[k])}" ${ac ? `autocomplete="${ac}"` : ''} ${k === 'comp' ? '' : 'required'} ${k === 'cep' || k === 'numero' || k === 'fone' ? 'inputmode="numeric"' : ''}></label>`).join('')}
+        <fieldset class="co-pay"><legend>Pagamento</legend>
+          <label><input type="radio" name="pay" value="pix" checked><span><b>Pix</b>5% de desconto, aprovado na hora</span></label>
+          <label><input type="radio" name="pay" value="cartao"><span><b>Cartão de crédito</b>link de pagamento seguro pela concierge</span></label>
+        </fieldset>
+      </form>`;
+    const paint = () => {
+      const pay = $('#coForm').pay.value, t = totals(pay);
+      $('#bagFoot').innerHTML = `<div class="row"><span>Peças</span><span>${money(t.sub)}</span></div>
+        <div class="row"><span>Frete ${ship ? esc(ship.label) : ''}</span><span>${ship ? (ship.price ? money(ship.price) : 'Cortesia') : 'a combinar'}</span></div>
+        ${t.disc ? `<div class="row pix"><span>Desconto Pix</span><span>− ${money(t.disc)}</span></div>` : ''}
+        <div class="row total"><span>Total</span><span>${money(t.total)}</span></div>
+        <button class="btn-gold" type="button" id="placeOrder">${user ? 'Confirmar pedido' : 'Enviar pedido pelo WhatsApp'}</button>
+        <button class="btn-text" type="button" id="backBag">Voltar para a sacola</button>`;
+    };
+    paint();
+    $('#coForm').addEventListener('change', paint);
+    $('#coForm').cep.addEventListener('input', async (e) => {
+      const v = e.target.value.replace(/\D/g, ''); if (v.length !== 8) return;
+      try { const j = await (await fetch(`https://viacep.com.br/ws/${v}/json/`)).json(); if (j.erro) return; const f = $('#coForm'); f.rua.value = j.logradouro || f.rua.value; f.bairro.value = j.bairro || f.bairro.value; f.cidade.value = j.localidade; f.uf.value = j.uf; f.numero.focus(); } catch (err) { /* digita à mão */ }
+    });
+  }
+  async function placeOrder() {
+    const f = $('#coForm'), d = Object.fromEntries(new FormData(f));
+    const miss = FIELDS.filter(([k]) => k !== 'comp' && !String(d[k] || '').trim());
+    if (miss.length) { toast(`Preencha: ${miss.map((m) => m[1]).join(', ')}.`); f[miss[0][0]].focus(); return; }
+    const btn = $('#placeOrder'); btn.disabled = true; btn.textContent = 'Enviando...';
+    const pay = d.pay, t = totals(pay);
+    const address = { name: d.nome, phone: d.fone, cep: d.cep, street: d.rua, number: d.numero, complement: d.comp, district: d.bairro, city: d.cidade, state: d.uf };
+    const lines = bag.map((x) => { const p = bySlug.get(x.slug); return `• ${x.qty}x ${p.name}${p.color ? ` (${p.color})` : ''}, tamanho ${x.size}: ${money(p.price * x.qty)}`; });
+    const addrTxt = `${d.rua}, ${d.numero}${d.comp ? ' ' + d.comp : ''}, ${d.bairro}, ${d.cidade}/${d.uf}, CEP ${d.cep}`;
+    let code = null;
+    if (window.V?.state?.user) {
+      try {
+        const r = await window.V.api.placeOrder({
+          p_items: bag.map((x) => ({ slug: x.slug, qty: x.qty, size: x.size, color: bySlug.get(x.slug).color })),
+          p_address: address, p_shipping: { label: ship ? ship.label : 'A combinar', price: ship ? ship.price : 0 }, p_payment: pay, p_coupon: null, p_gift: null
+        });
+        code = r.code;
+        try { const had = await window.V.api.addresses(); if (!had.length) await window.V.api.saveAddress({ label: 'Principal', recipient: d.nome, is_default: true, cep: d.cep, street: d.rua, number: d.numero, complement: d.comp, district: d.bairro, city: d.cidade, state: d.uf }); } catch (e) { /* já existe */ }
+      } catch (err) { console.warn('[Vellure] pedido no banco falhou, seguindo pelo WhatsApp', err); }
+    }
+    const msg = `Olá, Vellure! ${code ? `Acabei de fazer o pedido ${code}` : 'Quero finalizar meu pedido'}:\n\n${lines.join('\n')}\n\nFrete: ${ship ? `${ship.label}, ${ship.price ? money(ship.price) : 'cortesia'}` : 'a combinar'}\nPagamento: ${pay === 'pix' ? 'Pix (5% off)' : 'Cartão de crédito'}\nTotal: ${money(t.total)}\n\nEntrega para ${d.nome}: ${addrTxt}`;
+    view = 'done';
+    $('#bag h2').textContent = 'Pedido feito';
+    $('#bagItems').innerHTML = `<div class="done">
+      <svg viewBox="0 0 100 100" class="done-mark" aria-hidden="true"><circle cx="50" cy="50" r="46"/><path d="M24 26 C34 28 38 40 44 56 C47 64 49 72 50 78 M76 26 C66 28 62 40 56 56 C53 64 51 72 50 78"/></svg>
+      <strong>${code ? `Pedido ${esc(code)}` : 'Quase lá'}</strong>
+      <p>${code ? 'Recebemos seu pedido. A concierge confirma tudo e envia o pagamento pelo WhatsApp. Você acompanha cada etapa na sua conta.' : 'Envie a mensagem pronta no WhatsApp e a concierge confirma frete e pagamento com você.'}</p></div>`;
+    $('#bagFoot').innerHTML = `<a class="btn-gold" href="${esc(waLink(msg))}" target="_blank" rel="noopener">${code ? 'Avisar a concierge no WhatsApp' : 'Abrir o WhatsApp'}</a>${code ? '<a class="btn-line" href="conta.html#pedidos">Acompanhar meu pedido</a>' : ''}`;
+    if (code) { bag = []; save(); }
+    haptic([20, 40, 20]);
+    if (!code) window.open(waLink(msg), '_blank', 'noopener');
+  }
+
   $('#bagItems').addEventListener('click', (e) => {
     const row = e.target.closest('.bag-item'); if (!row) return; const i = +row.dataset.i;
     if (e.target.closest('.rm')) bag.splice(i, 1);
     const q = e.target.closest('[data-q]'); if (q) { bag[i].qty += +q.dataset.q; if (bag[i].qty < 1) bag.splice(i, 1); }
-    save(); renderBag();
+    save(); renderBag(); freteBox && freteBox.recalc();
   });
   $('#bagFoot').addEventListener('click', (e) => {
     if (e.target.closest('[data-go]')) { closeBag(); setTimeout(() => window.__vellureGo && window.__vellureGo('#vestiaire'), 350); }
-    if (e.target.id === 'checkout') {
-      const t = totals();
-      const lines = bag.map((x) => { const p = bySlug.get(x.slug); return `• ${x.qty}x ${p.name}${p.color ? ` (${p.color})` : ''}, tamanho ${x.size}: ${money(p.price * x.qty)}`; });
-      const msg = `Olá, Vellure! Quero finalizar meu pedido:\n\n${lines.join('\n')}\n\nSubtotal: ${money(t.sub)}\nNo Pix (5% off): ${money(t.pix)}\n\nPode me enviar o frete e o link de pagamento?`;
-      window.open(waLink(msg), '_blank', 'noopener');
-    }
+    if (e.target.id === 'toCheckout') { view = 'checkout'; renderBag(); $('#bagItems').scrollTop = 0; }
+    if (e.target.id === 'backBag') { view = 'list'; renderBag(); }
+    if (e.target.id === 'placeOrder') placeOrder();
   });
-  function openBag() { renderBag(); bagEl.classList.add('open'); bagEl.setAttribute('aria-hidden', 'false'); scrim.classList.add('on'); lock(); }
-  function closeBag() { if (!bagEl.classList.contains('open')) return; bagEl.classList.remove('open'); bagEl.setAttribute('aria-hidden', 'true'); scrim.classList.remove('on'); unlock(); }
+  function openBag() { if (view === 'done' && !bag.length) view = 'list'; renderBag(); bagEl.classList.add('open'); bagEl.setAttribute('aria-hidden', 'false'); scrim.classList.add('on'); lock(); }
+  function closeBag() { if (!bagEl.classList.contains('open')) return; bagEl.classList.remove('open'); bagEl.setAttribute('aria-hidden', 'true'); scrim.classList.remove('on'); unlock(); if (view === 'done') view = 'list'; }
   $('#bagBtn').addEventListener('click', openBag);
   $('.bag-close').addEventListener('click', closeBag);
   scrim.addEventListener('click', closeBag);
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeBag(); close(); } });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (sheet.classList.contains('open')) return closeSheet(); closeBag(); close(); } });
 
   save(); renderGrid();
+  if (/[?&]sacola=1/.test(location.search)) setTimeout(() => { view = 'checkout'; openBag(); }, 800);
   return { open, close, renderGrid, openBag, add, bySlug };
 }

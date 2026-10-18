@@ -1,0 +1,22 @@
+{
+  "name": "Vellure — Maison de Lingerie",
+  "short_name": "Vellure",
+  "description": "Lingerie, corsets, moda praia e fitness numa experiência imersiva em 3D.",
+  "lang": "pt-BR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#140a10",
+  "theme_color": "#140a10",
+  "categories": ["shopping", "lifestyle"],
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Minha conta", "url": "./conta.html", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Closet", "url": "./index.html#vestiaire", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
