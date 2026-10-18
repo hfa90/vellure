@@ -39,11 +39,12 @@
 
   <main class="vp">
     <section class="vp-hero" data-box="hero">
+      <div class="vp-dock" data-dock="hero" aria-hidden="true"></div>
       <div class="vp-hero-copy">
         <p class="vp-kicker">Assinatura VIP</p>
         <h1>Box Misteriosa</h1>
         <p class="vp-lead">Todo mês, uma lingerie escolhida para o seu estilo e o seu tamanho. Você só descobre qual quando abrir a caixa.</p>
-        <div class="vp-cta"><a class="btn-gold" href="#perfil">Montar minha box</a><a class="btn-line" href="#planos">Ver planos</a></div>
+        <div class="vp-cta"><a class="btn-gold" href="#perfil" data-imm>Montar minha box</a><a class="btn-line" href="#planos">Ver planos</a></div>
         <p class="vp-hint" id="peekHint">Toque na caixa para espiar.</p>
       </div>
     </section>
@@ -75,6 +76,7 @@
 
     <section class="vp-plans" id="planos" aria-label="Planos" data-box="plans">
       <header class="vp-sec-head">
+        <div class="vp-dock vp-dock-sm" data-dock="plans" aria-hidden="true"></div>
         <h2>Escolha o seu ritmo</h2>
         <div class="cy" role="radiogroup" aria-label="Frequência de cobrança" id="cycles"></div>
       </header>
@@ -82,6 +84,7 @@
     </section>
 
     <section class="vp-check" id="assinar" aria-label="Resumo da assinatura" data-box="check">
+      <div class="vp-dock vp-dock-sm" data-dock="check" aria-hidden="true"></div>
       <div class="ck-card" id="checkout"></div>
     </section>
 
@@ -98,6 +101,16 @@
       <div class="foot-bottom"><span>© 2026 Vellure Maison de Lingerie</span><a href="index.html">Loja</a><a href="conta.html">Minha conta</a></div>
     </footer>
   </main>
+
+  <!-- celular: montar a box em tela cheia -->
+  <div class="imm" id="imm" role="dialog" aria-modal="true" aria-label="Montar minha box" aria-hidden="true">
+    <div class="imm-top"><button type="button" class="imm-close" aria-label="Fechar">Fechar</button><div class="imm-dots" id="immDots"></div></div>
+    <div class="imm-dock" data-dock="imm" aria-hidden="true"></div>
+    <p class="imm-say" id="immSay">Toque, arraste ou incline o celular.</p>
+    <div class="imm-sheet"><div class="imm-track" id="immTrack"></div></div>
+  </div>
+
+  <div class="vp-bar" id="vpBar"><span class="vb-txt" id="vbTxt">Sua box em 5 toques</span><button type="button" class="btn-gold" id="vbBtn">Montar minha box</button></div>
 
   <div class="toast" id="toast" role="status"></div>
 

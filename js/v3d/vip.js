@@ -125,7 +125,7 @@ $('#quiz').addEventListener('click', (e) => {
   save(); paintPicks();
 });
 $('#quiz').addEventListener('input', (e) => { if (e.target.tagName === 'TEXTAREA') { prof.obs = e.target.value; save(); } });
-function save() { local.set('vellure_vip_perfil', prof); paintCheckout(); }
+function save() { local.set('vellure_vip_perfil', prof); paintCheckout(); if (typeof paintBar === 'function') { paintMobileQuiz(); paintBar(); } }
 
 /* ---------- planos ---------- */
 let cycle = local.get('vellure_vip_ciclo', 'trimestral'), plan = local.get('vellure_vip_plano', 'duo');
@@ -209,6 +209,7 @@ const secs = $$('[data-box]');
 let celebrating = false;
 function placeBox() {
   if (!box) return;
+  if (MOBILE) { if (!celebrating || immOpen) dockBox(); requestAnimationFrame(placeBox); return; }
   const vh = innerHeight; let cur = 'hero';
   secs.forEach((s) => { const r = s.getBoundingClientRect(); if (r.top < vh * 0.5 && r.bottom > vh * 0.5) cur = s.dataset.box; });
   const P = MOBILE
@@ -220,9 +221,147 @@ function placeBox() {
 let peeks = 0;
 $('#boxgl').addEventListener('pointerup', () => { if (++peeks === 1) $('#peekHint').textContent = 'Lá dentro tem uma peça escolhida para você.'; });
 
+/* =====================================================================
+   CELULAR: a caixa vive em "docas" reservadas na página e a montagem
+   acontece em tela cheia, com gestos, giroscópio e vibração
+   ===================================================================== */
+let immOpen = false;
+function dockBox() {
+  const vh = innerHeight;
+  const docks = immOpen ? [$('[data-dock="imm"]')] : $$('.vp > section [data-dock]');
+  let best = null, bestScore = -1;
+  for (const d of docks) {
+    const r = d.getBoundingClientRect(); if (!r.height) continue;
+    const vis = Math.min(r.bottom, vh) - Math.max(r.top, 0);
+    if (vis > bestScore) { bestScore = vis; best = r; }
+  }
+  if (!best || bestScore < 40) { box.place(0, 4, 0.001); return; }
+  const size = Math.min(best.width * 0.55, best.height * 0.72);
+  box.placeScreen(best.left + best.width / 2, best.top + best.height / 2, size);
+}
+
+/* giroscópio: a caixa acompanha o celular */
+let tiltOn = false;
+function startTilt() {
+  if (tiltOn || !box || !window.DeviceOrientationEvent) return; tiltOn = true;
+  const listen = () => addEventListener('deviceorientation', (e) => { if (e.gamma == null) return; box.tilt(Math.max(-1, Math.min(1, e.gamma / 30)), Math.max(-1, Math.min(1, ((e.beta || 50) - 50) / 30))); });
+  try { if (typeof DeviceOrientationEvent.requestPermission === 'function') DeviceOrientationEvent.requestPermission().then((r) => r === 'granted' && listen()).catch(() => {}); else listen(); } catch (e) { /* sem sensor */ }
+}
+addEventListener('touchstart', startTilt, { once: true, passive: true });
+
+/* uma bolinha de luz voa do toque até a caixa */
+function flyToBox(x, y, color = '#f3dcae', img = null) {
+  const dock = $(immOpen ? '[data-dock="imm"]' : '[data-dock="hero"]').getBoundingClientRect();
+  const el = document.createElement('i'); el.className = 'fly';
+  if (img) el.style.backgroundImage = `url(${img})`; else el.style.background = color;
+  el.style.left = `${x}px`; el.style.top = `${y}px`; document.body.appendChild(el);
+  const tx = dock.left + dock.width / 2 - x, ty = dock.top + dock.height * 0.45 - y;
+  const anim = el.animate([{ transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }, { transform: `translate(calc(-50% + ${tx * 0.6}px), calc(-50% + ${ty * 0.4 - 60}px)) scale(.8)`, opacity: 1, offset: 0.55 }, { transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(.15)`, opacity: 0 }], { duration: 750, easing: 'cubic-bezier(.5,0,.3,1)' });
+  anim.onfinish = () => { el.remove(); box && box.burstAt(70); haptic(14); };
+}
+
+const SAY = ['Qual estilo é mais você? Deslize e toque.', 'Toque nas cores que você ama.', 'O que você quer receber?', 'Seu tamanho, para acertar sempre.', 'Algo que prefere não receber?', 'Sua box está pronta.'];
+let iStep = 0;
+function immRender(dir = 0) {
+  const track = $('#immTrack');
+  $('#immDots').innerHTML = STEPS.map((_, i) => `<i class="${i < iStep ? 'done' : i === iStep ? 'now' : ''}"></i>`).join('') + `<i class="${iStep === STEPS.length ? 'now' : ''}"></i>`;
+  $('#immSay').textContent = SAY[iStep];
+  let html = '';
+  if (iStep < STEPS.length) {
+    const s = STEPS[iStep];
+    if (s.type === 'one') html = `<div class="im-styles">${s.opts.map(([v, l, d, img]) => `<button type="button" class="im-style" data-v="${v}" aria-pressed="${prof.estilo === v}"><img src="${img}" alt=""><span><b>${l}</b><small>${d}</small></span></button>`).join('')}</div>`;
+    else if (s.k === 'cores') html = `<div class="im-colors">${s.opts.map(([v, l, hex]) => `<button type="button" class="im-color" data-v="${v}" aria-pressed="${prof.cores.includes(v)}"><i style="--c:${hex}"></i><span>${l}</span></button>`).join('')}</div>`;
+    else if (s.type === 'many') html = `<div class="im-opts">${s.opts.map(([v, l, d]) => `<button type="button" class="im-opt" data-v="${v}" aria-pressed="${prof[s.k].includes(v)}"><b>${l}</b><small>${d}</small></button>`).join('')}</div>${s.note ? `<textarea class="im-note" rows="2" placeholder="Algo mais para a stylist? (presente, ocasião...)">${esc(prof.obs)}</textarea>` : ''}`;
+    else html = '<div id="immSize"></div>';
+    html = `<div class="im-slide"><h3>${s.q}</h3>${html}</div><div class="im-nav">${iStep ? '<button type="button" class="btn-text" data-go="-1">Voltar</button>' : '<span></span>'}${s.type === 'one' ? '<span class="im-swipe">deslize para ver todos</span>' : `<button type="button" class="btn-gold" data-go="1">${iStep === STEPS.length - 1 ? 'Revelar minha box' : 'Continuar'}</button>`}</div>`;
+  } else {
+    const list = picks();
+    html = `<div class="im-slide im-reveal"><h3>Isto pode vir na sua box</h3><div class="im-picks">${list.map(({ p, pct }, i) => `<a class="im-pick" style="--i:${i}" href="index.html#peca/${esc(p.slug)}"><img src="${esc(p.imgs[0])}" alt=""><b>${esc(p.name)}</b><em>${pct}% você</em></a>`).join('') || '<p class="qz-hint">Com essas escolhas não temos peças agora. Volte e desmarque alguma restrição.</p>'}</div>
+      <p class="qz-hint">A stylist escolhe a peça final entre estas e as novidades do mês.</p></div>
+      <div class="im-nav"><button type="button" class="btn-text" data-go="-1">Ajustar</button><button type="button" class="btn-gold" data-done>Escolher meu plano</button></div>`;
+  }
+  track.innerHTML = html;
+  if (iStep < STEPS.length && STEPS[iStep].type === 'size') {
+    const w = $('#immSize'), c = mySize.get();
+    const rec = () => mountSizeRecorder(w, { onDone: (v) => { if (v) { haptic([15, 30, 15]); box && box.burstAt(120); paintPicks(); paintCheckout(); setTimeout(() => go(1), 350); } } });
+    if (c) { w.innerHTML = `<div class="im-sized"><span class="mine-badge"><i></i>Seu tamanho: ${esc(c.top === c.bottom ? c.top : `${c.top} em cima, ${c.bottom} embaixo`)}</span><button type="button" class="btn-text">Alterar</button></div>`; w.querySelector('button').onclick = rec; } else rec();
+  }
+  if (iStep === STEPS.length && box) { box.celebrate(); haptic([20, 40, 20, 40, 80]); }
+  if (window.gsap && !REDUCED) gsap.fromTo('.im-slide > *, .im-nav', { opacity: 0, x: dir * 40 }, { opacity: 1, x: 0, duration: 0.6, stagger: 0.05, ease: 'expo.out' });
+}
+function valid() {
+  const s = STEPS[iStep]; if (!s) return true;
+  if (s.type === 'one' && !prof.estilo) return 'Toque no estilo que mais combina com você.';
+  if (s.k === 'cores' && !prof.cores.length) return 'Toque em pelo menos uma cor.';
+  if (s.k === 'pecas' && !prof.pecas.length) return 'Toque no que você quer receber.';
+  if (s.type === 'size' && !mySize.get()) return 'Grave seu tamanho para continuar.';
+  return true;
+}
+function go(d) {
+  if (d > 0) { const v = valid(); if (v !== true) { toast(v); haptic(40); return; } }
+  iStep = Math.max(0, Math.min(STEPS.length, iStep + d)); step = Math.min(iStep, STEPS.length - 1);
+  save(); paintPicks(); immRender(d);
+}
+function openImm() {
+  immOpen = true; startTilt();
+  iStep = !prof.estilo ? 0 : !prof.cores.length ? 1 : !prof.pecas.length ? 2 : !mySize.get() ? 3 : 4;
+  $('#imm').classList.add('open'); $('#imm').setAttribute('aria-hidden', 'false'); document.body.classList.add('imm-on');
+  immRender(); box && box.peek(1.4);
+}
+function closeImm() { immOpen = false; $('#imm').classList.remove('open'); $('#imm').setAttribute('aria-hidden', 'true'); document.body.classList.remove('imm-on'); renderStep(); paintMobileQuiz(); }
+$('.imm-close').addEventListener('click', closeImm);
+$('#immTrack').addEventListener('click', (e) => {
+  const g = e.target.closest('[data-go]'); if (g) return go(+g.dataset.go);
+  if (e.target.closest('[data-done]')) { closeImm(); setTimeout(() => document.getElementById('planos').scrollIntoView({ behavior: 'smooth' }), 120); return; }
+  const b = e.target.closest('[data-v]'); if (!b) return;
+  const s = STEPS[iStep], v = b.dataset.v, r = b.getBoundingClientRect();
+  if (s.type === 'one') {
+    prof.estilo = v; $$('.im-style').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.v === v)));
+    flyToBox(r.left + r.width / 2, r.top + r.height / 3, null, b.querySelector('img').src); setTimeout(() => go(1), 650); return;
+  }
+  const on = !prof[s.k].includes(v);
+  let arr = on ? [...prof[s.k], v] : prof[s.k].filter((x) => x !== v);
+  if (s.k === 'pecas') arr = v === 'surpresa' && on ? ['surpresa'] : arr.filter((x) => x !== 'surpresa' || v === 'surpresa');
+  prof[s.k] = arr;
+  $$('[data-v]', $('#immTrack')).forEach((x) => x.setAttribute('aria-pressed', String(arr.includes(x.dataset.v))));
+  if (on && s.k !== 'evitar') flyToBox(r.left + r.width / 2, r.top + r.height / 2, s.k === 'cores' ? s.opts.find((o) => o[0] === v)[2] : '#f3dcae');
+  else haptic(8);
+  save(); paintPicks();
+});
+$('#immTrack').addEventListener('input', (e) => { if (e.target.classList.contains('im-note')) { prof.obs = e.target.value; save(); } });
+let tx0 = null, ty0 = null;
+$('#immTrack').addEventListener('touchstart', (e) => { if (e.target.closest('.im-styles')) { tx0 = null; return; } tx0 = e.touches[0].clientX; ty0 = e.touches[0].clientY; }, { passive: true });
+$('#immTrack').addEventListener('touchend', (e) => { if (tx0 === null) return; const dx = e.changedTouches[0].clientX - tx0, dy = e.changedTouches[0].clientY - ty0; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.4) go(dx < 0 ? 1 : -1); tx0 = null; });
+
+/* cartão do perfil na página (celular) */
+function paintMobileQuiz() {
+  if (!MOBILE) return;
+  let card = $('#qzMobile');
+  if (!card) { card = document.createElement('div'); card.id = 'qzMobile'; card.className = 'qz-mobile'; $('.qz-wrap').prepend(card); }
+  const a = answered(), done = a >= 5;
+  card.innerHTML = `<div class="qm-ring" style="--p:${(Math.min(a, 5) / 5) * 100}"><span>${Math.min(a, 5)}/5</span></div>
+    <div class="qm-txt"><b>${done ? 'Perfil completo' : a > 1 ? 'Continue de onde parou' : 'Monte em 5 toques'}</b><small>${done ? `${esc(STYLE_NAME[prof.estilo] || '')}, ${prof.cores.length} cores, tamanho ${esc(mySize.get()?.top || '')}` : 'Em tela cheia, com a sua caixa ganhando luz a cada resposta.'}</small></div>
+    <button type="button" class="${done ? 'btn-line' : 'btn-gold'}" data-imm>${done ? 'Refazer' : 'Montar'}</button>`;
+}
+
+/* barra fixa inferior (celular) */
+function paintBar() {
+  if (!MOBILE) return;
+  const bar = $('#vpBar'), ck = $('#assinar').getBoundingClientRect(), hero = $('.vp-hero').getBoundingClientRect();
+  const done = answered() >= 5, p = VIP.PLANS.find((x) => x.id === plan);
+  const hide = immOpen || (ck.top < innerHeight * 0.9 && ck.bottom > 0) || hero.bottom > innerHeight * 0.65;
+  bar.classList.toggle('show', !hide);
+  $('#vbTxt').innerHTML = done ? `${esc(p.name)}<br><b>${money(p.prices[cycle])}</b>/mês` : 'Sua box em<br><b>5 toques</b>';
+  $('#vbBtn').textContent = done ? 'Assinar' : 'Montar minha box';
+  $('#vbBtn').dataset.act = done ? 'sub' : 'imm';
+}
+$('#vbBtn').addEventListener('click', (e) => { if (e.currentTarget.dataset.act === 'imm') openImm(); else document.getElementById('assinar').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+document.addEventListener('click', (e) => { const t = e.target.closest('[data-imm]'); if (t && MOBILE) { e.preventDefault(); openImm(); } });
+if (MOBILE) { addEventListener('scroll', paintBar, { passive: true }); setInterval(paintBar, 800); }
+
 /* ---------- início ---------- */
 (async function start() {
-  renderStep(); paintPicks(); renderPlans(); paintCheckout(); placeBox();
+  renderStep(); paintPicks(); renderPlans(); paintCheckout(); placeBox(); paintMobileQuiz(); paintBar();
   if (!REDUCED && window.gsap) {
     gsap.fromTo('.vp-hero-copy > *', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 1.4, stagger: 0.1, ease: 'expo.out', delay: 0.2 });
     if (box) setTimeout(() => box.peek(1.8), 1400);

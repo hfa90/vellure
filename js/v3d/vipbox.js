@@ -186,6 +186,14 @@ export function createBox(canvas) {
     fill(v) { const up = v > st.fill; st.fill = clamp(v, 0, 1); if (up) { st.open = 0.35; st.openT = 0.9; burst(60, 0.7); } },
     /** posição na tela conforme a seção */
     place(x, y, s) { target.x = x; target.y = y; target.s = s; },
+    /** encaixa a caixa num ponto da tela (px) com uma largura (px) */
+    placeScreen(px, py, size) {
+      const dist = camera.position.z, h = 2 * dist * Math.tan((camera.fov * Math.PI) / 360), wpp = h / innerHeight;
+      target.x = (px - innerWidth / 2) * wpp; target.y = -(py - innerHeight / 2) * wpp + camera.position.y - 0.5 * (size * wpp / W) * H;
+      target.s = Math.max(0.001, (size * wpp) / (W * 1.25));
+    },
+    tilt(x, y) { st.mx = x; st.my = y; },
+    burstAt(n = 80) { burst(n, 0.8); },
     celebrate() { st.open = 1; st.openT = 4.5; burst(400, 1.5); setTimeout(() => burst(260, 1.2), 600); }
   };
   return api;

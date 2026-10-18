@@ -1,5 +1,5 @@
 /* VELLURE · service worker: abre rápido e funciona com sinal fraco */
-const V = 'vellure-v4';
+const V = 'vellure-v5';
 const CORE = ['./', './index.html', './conta.html', './css/v3d.css', './css/conta.css', './js/config.js', './js/data.js', './js/catalog.js',
   './js/v3d/main.js', './js/v3d/scene.js', './js/v3d/shop.js', './js/v3d/common.js', './js/v3d/atelier.js', './js/v3d/sound.js', './js/v3d/conta.js', './js/v3d/vip.js', './js/v3d/vipbox.js', './assinatura.html', './css/vip.css',
   './assets/vendor/three.module.js', './assets/vendor/gsap.min.js', './assets/vendor/lenis.min.js', './assets/icons/icon-192.png'];
