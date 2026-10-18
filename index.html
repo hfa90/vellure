@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Vellure — Maison de Lingerie</title>
+  <meta name="description" content="Vellure, Maison de Lingerie. Lingerie, corsets, moda praia e fitness numa experiência imersiva em 3D.">
+  <meta name="theme-color" content="#140a10">
+  <meta property="og:title" content="Vellure — Maison de Lingerie">
+  <meta property="og:description" content="Entre na Maison. Lingerie, corsets, moda praia e fitness.">
+  <meta property="og:image" content="assets/modelos/conjunto-ana-clara-503-vermelho-1.jpg">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23140a10'/%3E%3Cpath d='M26 28 C36 30 40 42 46 58 C48 66 50 74 50 78 M74 28 C64 30 60 42 54 58 C52 66 50 74 50 78' stroke='%23d8bd88' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/v3d.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "./assets/vendor/three.module.js",
+      "three/addons/": "./assets/vendor/jsm/"
+    } }
+  </script>
+</head>
+<body class="is-loading">
+  <canvas id="gl" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="flash" aria-hidden="true"></div>
+
+  <!-- ENTRADA: loading em 3D -->
+  <section id="loader" aria-label="Carregando a Maison Vellure">
+    <div class="ld-word" aria-hidden="true"><span>V</span><span>E</span><span>L</span><span>L</span><span>U</span><span>R</span><span>E</span></div>
+    <p class="ld-sub">Maison de Lingerie</p>
+    <div class="ld-meter" aria-live="polite"><span class="ld-num" id="ldNum">0</span><span class="ld-track"><i id="ldBar"></i></span></div>
+    <button class="ld-enter" id="enterBtn" type="button" disabled>
+      <span class="ld-enter-txt">Entrar na Maison</span>
+    </button>
+    <p class="ld-hint" id="ldHint">Mova o cursor: a joia acompanha você.</p>
+  </section>
+
+  <!-- NAVEGAÇÃO -->
+  <header class="nav">
+    <button class="nav-menu" id="menuBtn" type="button" aria-expanded="false" aria-controls="menu"><span class="lines"><i></i><i></i></span><span class="lbl">Menu</span></button>
+    <a class="nav-brand" href="#inicio" aria-label="Vellure, início">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="ng" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ecd3a2"/><stop offset="1" stop-color="#a07a42"/></linearGradient></defs><circle cx="50" cy="50" r="46" fill="none" stroke="url(#ng)" stroke-width="2"/><path d="M24 26 C34 28 38 40 44 56 C47 64 49 72 50 78" fill="none" stroke="url(#ng)" stroke-width="5" stroke-linecap="round"/><path d="M76 26 C66 28 62 40 56 56 C53 64 51 72 50 78" fill="none" stroke="url(#ng)" stroke-width="2.4" stroke-linecap="round"/><path d="M50 12 L55 20 L50 28 L45 20 Z" fill="url(#ng)"/></svg>
+      <span>VELLURE</span>
+    </a>
+    <div class="nav-tools">
+      <button class="nav-sound" id="soundBtn" type="button" aria-pressed="false" aria-label="Ligar som ambiente"><span class="eq"><i></i><i></i><i></i><i></i></span><span class="lbl">Som</span></button>
+      <button class="nav-bag" id="bagBtn" type="button" aria-label="Abrir sacola"><span class="lbl">Sacola</span><span class="count" id="bagCount">0</span></button>
+    </div>
+  </header>
+
+  <nav id="menu" class="menu" aria-hidden="true">
+    <div class="menu-preview" aria-hidden="true"><img alt=""></div>
+    <ul class="menu-list">
+      <li><a href="#vestiaire" data-filter="lingerie" data-img="assets/modelos/conjunto-ana-clara-503-vinho-1.jpg">Lingerie</a></li>
+      <li><a href="#vestiaire" data-filter="corset" data-img="assets/modelos/espartilho-de-tule-com-bordado-verde-esmeralda-vermelho-1.jpg">Corsets</a></li>
+      <li><a href="#vestiaire" data-filter="praia" data-img="assets/modelos/maio-estampado-com-detalhe-liso-folhagem-rosa-pink-rosa-pink-1.jpg">Moda praia</a></li>
+      <li><a href="#vestiaire" data-filter="fitness" data-img="assets/modelos/calca-ivy-tecido-cirre-vinho-1.jpg">Fitness</a></li>
+      <li><a href="#galerie" data-img="assets/modelos/conjunto-maya-501-preto-1.jpg">A galeria em 3D</a></li>
+    </ul>
+    <div class="menu-foot">
+      <a href="#" data-wa="Olá, Vellure! Quero falar com a concierge.">Falar com a concierge</a>
+      <a href="admin.html">Painel da Maison</a>
+    </div>
+  </nav>
+
+  <main id="site">
+    <section id="inicio" class="hero" aria-label="Início">
+      <h1 class="hero-word" aria-label="Vellure"><span>V</span><span>E</span><span>L</span><span>L</span><span>U</span><span>R</span><span>E</span></h1>
+      <div class="hero-foot">
+        <p class="hero-line">Lingerie, corsets, moda praia e fitness.<br>Peças que você sente antes de ver.</p>
+        <a class="hero-cue" href="#manifesto"><span class="thread"></span>Role para entrar</a>
+      </div>
+    </section>
+
+    <section id="manifesto" class="manifesto" aria-label="Manifesto">
+      <p class="mf-text">A Vellure não veste um corpo qualquer. Veste o seu, do jeito que ele é: renda que abraça, tule que respira e cortes pensados para você se sentir inteira, do espelho à rua.</p>
+    </section>
+
+    <section id="galerie" class="galerie" aria-label="Galeria 3D">
+      <div class="gl-sticky">
+      <div class="gl-top">
+        <h2 class="gl-title">A galeria</h2>
+        <p class="gl-hint">Role ou arraste para girar a escadaria. Toque numa peça para vê-la de perto.</p>
+        <div class="chips" role="group" aria-label="Filtrar galeria" data-target="galerie">
+          <button type="button" class="chip on" data-f="all">Tudo</button>
+          <button type="button" class="chip" data-f="lingerie">Lingerie</button>
+          <button type="button" class="chip" data-f="corset">Corsets</button>
+          <button type="button" class="chip" data-f="praia">Praia</button>
+          <button type="button" class="chip" data-f="fitness">Fitness</button>
+        </div>
+      </div>
+      <div class="gl-caption" aria-live="polite">
+        <span class="gl-count" id="glCount">1 de 50</span>
+        <h3 class="gl-name" id="glName"></h3>
+        <p class="gl-meta" id="glMeta"></p>
+        <button type="button" class="btn-line" id="glOpen">Ver a peça</button>
+      </div>
+      <div class="gl-progress" aria-hidden="true"><i id="glBar"></i></div>
+      </div>
+    </section>
+
+    <section id="seda" class="seda" aria-label="Toque a seda">
+      <h2 class="sd-title">Passe a mão<br>pela seda.</h2>
+      <p class="sd-sub" id="sdSub">Mova o cursor devagar. O tecido responde ao seu toque, como uma boa peça deve responder.</p>
+    </section>
+
+    <section id="vestiaire" class="vestiaire" aria-label="Todas as peças">
+      <header class="vs-head">
+        <h2 class="vs-title">O closet inteiro</h2>
+        <div class="chips" role="group" aria-label="Filtrar peças" data-target="vestiaire">
+          <button type="button" class="chip on" data-f="all">Tudo</button>
+          <button type="button" class="chip" data-f="lingerie">Lingerie</button>
+          <button type="button" class="chip" data-f="corset">Corsets</button>
+          <button type="button" class="chip" data-f="praia">Praia</button>
+          <button type="button" class="chip" data-f="fitness">Fitness</button>
+        </div>
+      </header>
+      <div class="vs-grid" id="grid"></div>
+    </section>
+
+    <section class="promessa" aria-label="Como compramos com você">
+      <p>Pague no Pix com <em>5% de desconto</em>, troque em até <em>30 dias</em> e fale com uma pessoa de verdade pelo <em>WhatsApp</em> do primeiro clique à entrega.</p>
+    </section>
+
+    <footer class="foot">
+      <form class="foot-nl" id="nlForm">
+        <h2>Lista privada</h2>
+        <p>Receba as peças novas antes de todo mundo. Um e-mail por lançamento, nada mais.</p>
+        <div class="nl-row"><input type="email" name="email" placeholder="seu@email.com" required aria-label="Seu e-mail"><button type="submit">Quero receber</button></div>
+      </form>
+      <div class="foot-word" aria-hidden="true">VELLURE</div>
+      <div class="foot-bottom">
+        <span>© 2026 Vellure Maison de Lingerie</span>
+        <a href="#" data-wa="Olá, Vellure! Quero falar com a concierge.">WhatsApp</a>
+        <a href="admin.html">Painel</a>
+      </div>
+    </footer>
+  </main>
+
+  <!-- PRODUTO -->
+  <div id="pdp" class="pdp" role="dialog" aria-modal="true" aria-label="Peça" aria-hidden="true">
+    <button class="pdp-close" type="button" aria-label="Fechar peça">Fechar</button>
+    <div class="pdp-media">
+      <div class="pdp-stage" id="pdpStage"></div>
+      <div class="pdp-thumbs" id="pdpThumbs"></div>
+    </div>
+    <div class="pdp-info">
+      <p class="pdp-cat" id="pdpCat"></p>
+      <h2 class="pdp-name" id="pdpName"></h2>
+      <p class="pdp-color" id="pdpColor"></p>
+      <p class="pdp-price"><span id="pdpPrice"></span><small id="pdpPix"></small></p>
+      <fieldset class="pdp-sizes"><legend>Tamanho</legend><div id="pdpSizes"></div></fieldset>
+      <button class="btn-gold" id="pdpAdd" type="button">Colocar na sacola</button>
+      <button class="btn-line" id="pdpWa" type="button">Tirar dúvidas no WhatsApp</button>
+      <p class="pdp-note">Troca em até 30 dias. Envio para todo o Brasil.</p>
+      <div class="pdp-more"><h3>Combina com</h3><div id="pdpMore"></div></div>
+    </div>
+  </div>
+
+  <!-- SACOLA -->
+  <aside id="bag" class="bag" aria-label="Sacola" aria-hidden="true">
+    <header><h2>Sua sacola</h2><button class="bag-close" type="button" aria-label="Fechar sacola">Fechar</button></header>
+    <div class="bag-items" id="bagItems"></div>
+    <footer class="bag-foot" id="bagFoot"></footer>
+  </aside>
+  <div class="scrim" aria-hidden="true"></div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <div class="cursor" aria-hidden="true"><i class="c-dot"></i><i class="c-ring"><span class="c-lbl"></span></i></div>
+
+  <script src="assets/vendor/gsap.min.js"></script>
+  <script src="assets/vendor/lenis.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/catalog.js"></script>
+  <script type="module" src="js/v3d/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vellure — Maison de Lingerie</title>
+  <meta name="description" content="Vellure · Maison de Lingerie. Lingerie de alta-costura em renda de Calais e seda, Box Misteriosa por assinatura e o clube Cercle Privé. São Paulo.">
+  <meta name="theme-color" content="#0e0b0d">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%230e0b0d'/%3E%3Cpath d='M26 28 C36 30 40 42 46 58 C48 66 50 74 50 78 M74 28 C64 30 60 42 54 58 C52 66 50 74 50 78' stroke='%23c9a46a' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/vellure.css">
+</head>
+<body>
+  <!-- LOADING COM A MARCA -->
+  <div id="loader" aria-label="Carregando Vellure">
+    <div class="curtain l"></div><div class="curtain r"></div>
+    <canvas></canvas>
+    <div class="stage">
+      <div class="mark-slot"></div>
+      <div class="word"></div>
+      <div class="tag">MAISON DE LINGERIE · SÃO PAULO</div>
+      <div class="bar"><i></i></div>
+      <div class="pct">000</div>
+    </div>
+    <div class="hint">mova o cursor · toque para entrar</div>
+  </div>
+
+  <div class="cursor"><div class="dot"></div><div class="ring"></div></div>
+
+  <div id="dbBanner" class="db-banner" hidden>Modo vitrine: o banco ainda não foi instalado. Rode <code>supabase/schema.sql</code> no SQL Editor do Supabase para ativar pedidos, contas e assinaturas.</div>
+  <div class="announce"><div class="track">
+    <span>Entrega cortesia acima de R$ 1.500</span><span>Mensageira em até 3h em São Paulo</span><span>Box Misteriosa · a partir de R$ 189/mês</span><span>5% off no Pix</span><span>Troca cortesia em 30 dias</span>
+    <span>Entrega cortesia acima de R$ 1.500</span><span>Mensageira em até 3h em São Paulo</span><span>Box Misteriosa · a partir de R$ 189/mês</span><span>5% off no Pix</span><span>Troca cortesia em 30 dias</span>
+  </div></div>
+
+  <header class="site">
+    <div class="wrap bar">
+      <button class="icon-btn burger" aria-label="Menu"><svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.3"><path d="M3 8h18M3 16h18"/></svg></button>
+      <nav class="main">
+        <a href="#/loja">Coleção</a><a href="#/box">Box Misteriosa</a><a href="#/cercle">Cercle Privé</a><a href="#/medidas">Medidas</a><a href="#/entrega">Entrega</a>
+      </nav>
+      <a class="brand" href="#/" aria-label="Vellure — início">
+        <svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="hdG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d8bd88"/><stop offset="1" stop-color="#8f6c3a"/></linearGradient></defs><circle cx="50" cy="50" r="46" fill="none" stroke="url(#hdG)" stroke-width="1.6"/><path d="M24 26 C34 28 38 40 44 56 C47 64 49 72 50 78" fill="none" stroke="url(#hdG)" stroke-width="4" stroke-linecap="round"/><path d="M76 26 C66 28 62 40 56 56 C53 64 51 72 50 78" fill="none" stroke="url(#hdG)" stroke-width="2" stroke-linecap="round"/><path d="M50 14 L54 20 L50 26 L46 20 Z" fill="url(#hdG)"/></svg>
+        <span class="name">VELLURE<small>MAISON DE LINGERIE</small></span>
+      </a>
+      <div class="tools">
+        <button class="icon-btn hide-sm" id="searchBtn" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button>
+        <button class="icon-btn" id="acctBtn" aria-label="Minha conta"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></button>
+        <button class="icon-btn hide-sm" id="wishBtn" aria-label="Favoritos"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9.2C1.6 7.2 4 4 7.2 4c2 0 3.5 1.1 4.8 2.8C13.3 5.1 14.8 4 16.8 4 20 4 22.4 7.2 21 10.8 19 15.6 12 20 12 20z"/></svg><span class="badge" id="wishCount">0</span></button>
+        <button class="icon-btn" id="cartBtn" aria-label="Sacola"><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 13H6z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg><span class="badge" id="cartCount">0</span></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="drawer-menu">
+    <button class="icon-btn close" aria-label="Fechar"><svg viewBox="0 0 24 24" style="stroke:currentColor"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+    <a href="#/">Início</a><a href="#/loja">Coleção</a><a href="#/box">Box Misteriosa <em>assinatura</em></a><a href="#/cercle">Cercle Privé <em>clube</em></a><a href="#/medidas">Medidas</a><a href="#/entrega">Entrega</a><a href="#/conta">Minha conta</a>
+  </div>
+
+  <main id="view"></main>
+
+  <footer class="site">
+    <div class="wrap">
+      <div class="top">
+        <div class="nl"><h3>Liste <em>Privée</em></h3><p>Convites para pré-vendas, desfiles íntimos no atelier e edições que nunca chegam à vitrine.</p>
+          <form id="nlForm"><input type="email" name="email" placeholder="Seu e-mail" required aria-label="E-mail"><button>Entrar na lista</button></form></div>
+        <div><h4>Maison</h4><a href="#/loja">Coleção</a><a href="#/loja?cat=noiva">Noiva</a><a href="#/box">Box Misteriosa</a><a href="#/cercle">Cercle Privé</a></div>
+        <div><h4>Atendimento</h4><a href="#/medidas">Atelier de Medidas</a><a href="#/entrega">Entrega & Frete</a><a href="#/conta">Minha conta</a><a href="#/conta/pedidos">Meus pedidos</a></div>
+        <div><h4>Atelier</h4><a>Rua Oscar Freire · Jardins</a><a>São Paulo · SP</a><a>Seg a sáb · 10h às 20h</a><a href="admin.html">Acesso administrativo</a></div>
+      </div>
+      <div class="giant">VELLURE</div>
+      <div class="bottom"><span>© 2026 Vellure Maison de Lingerie. Todos os direitos reservados.</span><span>Ilustrações editoriais geradas — modelos fictícias.</span></div>
+    </div>
+  </footer>
+
+  <div class="overlay"></div>
+  <aside class="side-panel" id="cart" aria-label="Sacola">
+    <header><h3>Sua <em>sacola</em></h3><button class="icon-btn close" aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button></header>
+    <div class="content"></div>
+    <footer><div class="totals"></div><button class="btn block" id="goCheckout">Finalizar pedido</button></footer>
+  </aside>
+  <div class="modal" id="modal"><div class="box"></div></div>
+  <div class="toasts"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/delivery.js"></script>
+  <script src="js/sizer.js"></script>
+  <script src="js/views.js"></script>
+</body>
+</html>

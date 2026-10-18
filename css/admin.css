@@ -1,0 +1,73 @@
+/* VELLURE · Painel administrativo */
+body.admin { background: #f4efe9; cursor: auto; }
+.adm { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; }
+.adm aside { background: var(--noir); color: rgba(250, 246, 241, .7); padding: 28px 18px; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; overflow-y: auto; }
+.adm aside .brand { color: var(--ivory); margin: 0 8px 34px; }
+.adm aside .brand .name { font-size: 20px; }
+.adm aside .brand .name small { color: var(--gold); }
+.adm aside nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.adm aside nav a { display: flex; gap: 12px; align-items: center; padding: 11px 12px; font-size: 13px; letter-spacing: .06em; border-radius: 6px; transition: all .25s; cursor: pointer; }
+.adm aside nav a svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.4; flex: none; }
+.adm aside nav a:hover { background: rgba(230, 207, 159, .08); color: var(--ivory); }
+.adm aside nav a.on { background: rgba(230, 207, 159, .14); color: var(--gold-2); }
+.adm aside nav a .cnt { margin-left: auto; background: var(--wine); color: var(--gold-2); font-size: 10px; border-radius: 10px; padding: 1px 7px; }
+.adm aside .foot { font-size: 12px; border-top: 1px solid rgba(230, 207, 159, .15); padding-top: 16px; margin-top: 16px; }
+.adm aside .foot a { color: var(--gold-2); }
+.adm main { padding: 30px clamp(16px, 3vw, 44px) 80px; min-width: 0; }
+.adm .top { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 26px; flex-wrap: wrap; }
+.adm .top h1 { font-size: clamp(34px, 4vw, 50px); }
+.adm .top h1 em { color: var(--wine); }
+.adm .top .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.kgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 22px; }
+.kcard { background: #fff; border-radius: 10px; padding: 20px 22px; border: 1px solid var(--line); position: relative; overflow: hidden; }
+.kcard span { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.kcard b { display: block; font-family: var(--serif); font-size: clamp(26px, 2.3vw, 34px); white-space: nowrap; font-weight: 400; margin-top: 6px; line-height: 1.1; }
+.kcard small { font-size: 12px; color: var(--muted); }
+.kcard.dark { background: var(--noir); color: var(--ivory); border-color: var(--noir); }
+.kcard.dark b { color: var(--gold-2); }
+.pane { background: #fff; border-radius: 10px; border: 1px solid var(--line); padding: 22px; margin-bottom: 18px; min-width: 0; }
+.pane h3 { font-size: 26px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.two { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; }
+@media (max-width: 1100px) { .two { grid-template-columns: 1fr; } }
+.tbl-wrap { overflow-x: auto; }
+table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tbl th { text-align: left; font-weight: 400; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tbl td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.tbl tr.click { cursor: pointer; transition: background .2s; }
+.tbl tr.click:hover td { background: #faf6f1; }
+.tbl .thumb { width: 46px; height: 56px; overflow: hidden; border-radius: 4px; background: var(--cream); }
+.tbl .thumb svg, .tbl .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+.filters input, .filters select, .mini-in { padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 13px; }
+.chart { width: 100%; height: 220px; }
+.chart .bar { fill: var(--wine); transition: fill .2s; }
+.chart .bar:hover { fill: var(--gold); }
+.chart text { font-size: 10px; fill: var(--muted); font-family: var(--sans); }
+.list-row { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.art-editor { display: grid; grid-template-columns: 180px 1fr; gap: 20px; align-items: start; background: var(--cream); padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+.art-editor .pv { aspect-ratio: 4/5; overflow: hidden; border-radius: 6px; }
+.art-editor .pv svg { width: 100%; height: 100%; }
+.art-editor label { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: block; margin: 8px 0 4px; }
+.art-editor input[type=color] { width: 48px; height: 32px; border: 0; padding: 0; background: none; }
+.imgs { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 14px; }
+.imgs .im { width: 80px; height: 100px; position: relative; border-radius: 4px; overflow: hidden; background: var(--cream); }
+.imgs .im img { width: 100%; height: 100%; object-fit: cover; }
+.imgs .im button { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 0, 0, .6); color: #fff; font-size: 12px; }
+.drop { border: 1px dashed var(--muted); border-radius: 6px; padding: 18px; text-align: center; font-size: 13px; color: var(--muted); cursor: pointer; }
+.drop.over { border-color: var(--wine); background: var(--blush); }
+.gate { min-height: 100vh; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 40%, #2a1d22, #0e0b0d 70%); padding: 16px; }
+.gate .box { background: var(--ivory); width: min(420px, 100%); padding: 40px; text-align: center; }
+.gate .logo-mark { margin: 0 auto 16px; width: 60px; height: 60px; }
+.toggle { position: relative; width: 38px; height: 22px; border-radius: 20px; background: var(--sand); transition: background .3s; flex: none; }
+.toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .3s var(--ease); }
+.toggle.on { background: var(--ok); }
+.toggle.on::after { transform: translateX(16px); }
+.burger-adm { display: none; }
+@media (max-width: 900px) {
+  .adm { grid-template-columns: 1fr; }
+  .adm aside { position: fixed; z-index: 60; inset: 0 auto 0 0; width: 260px; transform: translateX(-100%); transition: transform .5s var(--ease); }
+  .adm aside.open { transform: none; }
+  .burger-adm { display: grid; }
+  .art-editor { grid-template-columns: 1fr; }
+  .art-editor .pv { max-width: 200px; }
+}
