@@ -3,6 +3,8 @@
    ===================================================================== */
 import { $, $$, esc, money, CAT_NAME, PIX, HEART, waLink, toast, haptic, local, favs, mySize } from './common.js';
 import { mountSizer, mountFrete, loadMeasures, sizeCalc } from './atelier.js';
+import { pixReady, pixPayload, pixQrSvg } from './pix.js';
+const PAYCFG = (window.VELLURE_CONFIG || {}).PAYMENTS || {};
 export { money, CAT_NAME, waLink, toast };
 
 const FIELDS = [['nome', 'Nome completo', 'name'], ['fone', 'WhatsApp', 'tel'], ['cep', 'CEP', 'postal-code'], ['rua', 'Rua', 'address-line1'], ['numero', 'Número', ''], ['comp', 'Complemento', 'address-line2'], ['bairro', 'Bairro', ''], ['cidade', 'Cidade', 'address-level2'], ['uf', 'UF', 'address-level1']];
@@ -98,6 +100,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
       gsap.fromTo('.pdp-info > *', { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.9, stagger: 0.05, ease: 'expo.out', delay: 0.15 });
     }
     if (push) history.pushState({ peca: slug }, '', `#peca/${slug}`);
+    const seen = [slug, ...local.get('vellure_vistos', []).filter((x) => x !== slug)].slice(0, 12); local.set('vellure_vistos', seen); paintSeen();
     chime && chime(1.2);
     setTimeout(() => $('.pdp-close').focus({ preventScroll: true }), 50);
   }
@@ -127,6 +130,11 @@ export function createShop({ catalog, lock, unlock, chime }) {
       return;
     }
     add(current.slug, size); close(); openBag();
+  });
+  $('#pdpShare').addEventListener('click', async () => {
+    const url = `${location.href.split('#')[0]}#peca/${current.slug}`, title = `${current.name} | Vellure`;
+    try { if (navigator.share) { await navigator.share({ title, text: `${current.name}${current.color ? ` (${current.color})` : ''} na Vellure`, url }); return; } } catch (e) { return; }
+    try { await navigator.clipboard.writeText(url); toast('Link da peça copiado.'); } catch (e) { toast(url); }
   });
   $('#pdpWa').addEventListener('click', () => window.open(waLink(`Olá, Vellure! Tenho uma dúvida sobre a peça ${current.name}${current.color ? ` (${current.color})` : ''}.`), '_blank', 'noopener'));
   addEventListener('popstate', () => {
@@ -162,10 +170,12 @@ export function createShop({ catalog, lock, unlock, chime }) {
     chime && chime(1.5);
   }
   const subtotal = () => bag.reduce((a, x) => a + bySlug.get(x.slug).price * x.qty, 0);
+  let coupon = null; // { code, discount }
   function totals(pay = 'pix') {
     const sub = subtotal(), fr = ship ? ship.price : 0;
-    const disc = pay === 'pix' ? sub * PIX : 0;
-    return { sub, fr, disc, total: sub - disc + fr };
+    const cd = coupon ? Math.min(coupon.discount, sub) : 0;
+    const disc = pay === 'pix' ? (sub - cd) * PIX : 0;
+    return { sub, fr, cd, disc, total: Math.max(0, sub - cd - disc + fr) };
   }
   const itemsHTML = () => bag.map((x, i) => {
     const p = bySlug.get(x.slug);
@@ -208,22 +218,36 @@ export function createShop({ catalog, lock, unlock, chime }) {
       ${user ? '' : `<div class="co-login"><p>Entre na sua conta para acompanhar este pedido, com status e rastreio.</p><a class="btn-line" href="conta.html?volta=sacola">Entrar ou criar conta</a></div>`}
       <form class="co-form" id="coForm" novalidate>
         ${FIELDS.map(([k, l, ac]) => `<label class="co-f co-${k}"><span>${l}</span><input name="${k}" value="${esc(val[k])}" ${ac ? `autocomplete="${ac}"` : ''} ${k === 'comp' ? '' : 'required'} ${k === 'cep' || k === 'numero' || k === 'fone' ? 'inputmode="numeric"' : ''}></label>`).join('')}
-        <fieldset class="co-pay"><legend>Pagamento</legend>
-          <label><input type="radio" name="pay" value="pix" checked><span><b>Pix</b>5% de desconto, aprovado na hora</span></label>
-          <label><input type="radio" name="pay" value="cartao"><span><b>Cartão de crédito</b>link de pagamento seguro pela concierge</span></label>
+        <fieldset class="co-pay"><legend>Pagamento no ato da compra</legend>
+          <label><input type="radio" name="pay" value="pix" checked><span><b>Pix</b>${Math.round(PIX * 100)}% de desconto. O QR Code aparece na hora, com o valor exato.</span><em class="co-tag">${Math.round(PIX * 100)}% off</em></label>
+          ${PAYCFG.CASH !== false ? '<label><input type="radio" name="pay" value="dinheiro"><span><b>Dinheiro</b>Pague na entrega ou na retirada. Se precisar, levamos troco.</span></label>' : ''}
+          <label class="co-off" aria-disabled="true"><input type="radio" name="pay" value="cartao" disabled><span><b>Cartão de crédito</b>Em breve.</span><em class="co-tag">em breve</em></label>
         </fieldset>
+        <label class="co-f co-troco" hidden><span>Troco para quanto? (opcional)</span><input name="troco" inputmode="decimal" placeholder="Ex.: 200"></label>
+        <div class="co-cupom"><label class="co-f"><span>Cupom de desconto</span><input name="cupom" autocomplete="off" value="${esc(coupon?.code || '')}" style="text-transform:uppercase"></label><button type="button" class="btn-line" id="applyCoupon">Aplicar</button><p class="co-cmsg" id="couponMsg">${coupon ? `Cupom ${esc(coupon.code)} aplicado.` : ''}</p></div>
       </form>`;
     const paint = () => {
       const pay = $('#coForm').pay.value, t = totals(pay);
       $('#bagFoot').innerHTML = `<div class="row"><span>Peças</span><span>${money(t.sub)}</span></div>
         <div class="row"><span>Frete ${ship ? esc(ship.label) : ''}</span><span>${ship ? (ship.price ? money(ship.price) : 'Cortesia') : 'a combinar'}</span></div>
+        ${t.cd ? `<div class="row pix"><span>Cupom ${esc(coupon.code)}</span><span>− ${money(t.cd)}</span></div>` : ''}
         ${t.disc ? `<div class="row pix"><span>Desconto Pix</span><span>− ${money(t.disc)}</span></div>` : ''}
         <div class="row total"><span>Total</span><span>${money(t.total)}</span></div>
-        <button class="btn-gold" type="button" id="placeOrder">${user ? 'Confirmar pedido' : 'Enviar pedido pelo WhatsApp'}</button>
+        <button class="btn-gold" type="button" id="placeOrder">${pay === 'pix' ? 'Gerar Pix e finalizar' : 'Confirmar pedido em dinheiro'}</button>
         <button class="btn-text" type="button" id="backBag">Voltar para a sacola</button>`;
     };
     paint();
-    $('#coForm').addEventListener('change', paint);
+    $('#coForm').addEventListener('change', () => { $('.co-troco').hidden = $('#coForm').pay.value !== 'dinheiro'; paint(); });
+    $('#applyCoupon').addEventListener('click', async () => {
+      const code = $('#coForm').cupom.value.trim().toUpperCase(), msg = $('#couponMsg');
+      if (!code) { coupon = null; msg.textContent = ''; paint(); return; }
+      try {
+        const r = window.V?.api ? await window.V.api.checkCoupon(code, subtotal()) : { ok: false, message: 'Cupom indisponível agora.' };
+        if (r.ok) { coupon = { code: r.code || code, discount: +r.discount }; msg.textContent = `Cupom ${coupon.code} aplicado: − ${money(coupon.discount)}.`; msg.classList.remove('err'); haptic(12); }
+        else { coupon = null; msg.textContent = r.message || 'Cupom inválido.'; msg.classList.add('err'); }
+      } catch (e) { coupon = null; msg.textContent = 'Não consegui validar o cupom agora.'; msg.classList.add('err'); }
+      paint();
+    });
     $('#coForm').cep.addEventListener('input', async (e) => {
       const v = e.target.value.replace(/\D/g, ''); if (v.length !== 8) return;
       try { const j = await (await fetch(`https://viacep.com.br/ws/${v}/json/`)).json(); if (j.erro) return; const f = $('#coForm'); f.rua.value = j.logradouro || f.rua.value; f.bairro.value = j.bairro || f.bairro.value; f.cidade.value = j.localidade; f.uf.value = j.uf; f.numero.focus(); } catch (err) { /* digita à mão */ }
@@ -234,32 +258,56 @@ export function createShop({ catalog, lock, unlock, chime }) {
     const miss = FIELDS.filter(([k]) => k !== 'comp' && !String(d[k] || '').trim());
     if (miss.length) { toast(`Preencha: ${miss.map((m) => m[1]).join(', ')}.`); f[miss[0][0]].focus(); return; }
     const btn = $('#placeOrder'); btn.disabled = true; btn.textContent = 'Enviando...';
-    const pay = d.pay, t = totals(pay);
-    const address = { name: d.nome, phone: d.fone, cep: d.cep, street: d.rua, number: d.numero, complement: d.comp, district: d.bairro, city: d.cidade, state: d.uf };
+    const pay = d.pay === 'dinheiro' ? 'dinheiro' : 'pix', t = totals(pay);
+    const troco = String(d.troco || '').replace(',', '.').replace(/[^\d.]/g, '');
+    const address = { name: d.nome, phone: d.fone, cep: d.cep, street: d.rua, number: d.numero, complement: d.comp, district: d.bairro, city: d.cidade, state: d.uf, ...(pay === 'dinheiro' && troco ? { troco: +troco } : {}) };
     const lines = bag.map((x) => { const p = bySlug.get(x.slug); return `• ${x.qty}x ${p.name}${p.color ? ` (${p.color})` : ''}, tamanho ${x.size}: ${money(p.price * x.qty)}`; });
     const addrTxt = `${d.rua}, ${d.numero}${d.comp ? ' ' + d.comp : ''}, ${d.bairro}, ${d.cidade}/${d.uf}, CEP ${d.cep}`;
-    let code = null;
+    let code = null, saved = false, total = t.total;
     if (window.V?.state?.user) {
       try {
         const r = await window.V.api.placeOrder({
           p_items: bag.map((x) => ({ slug: x.slug, qty: x.qty, size: x.size, color: bySlug.get(x.slug).color })),
-          p_address: address, p_shipping: { label: ship ? ship.label : 'A combinar', price: ship ? ship.price : 0 }, p_payment: pay, p_coupon: null, p_gift: null
+          p_address: address, p_shipping: { label: ship ? ship.label : 'A combinar', price: ship ? ship.price : 0 }, p_payment: pay, p_coupon: coupon?.code || null, p_gift: null
         });
-        code = r.code;
+        code = r.code; saved = true; if (r.total != null) total = +r.total;
         try { const had = await window.V.api.addresses(); if (!had.length) await window.V.api.saveAddress({ label: 'Principal', recipient: d.nome, is_default: true, cep: d.cep, street: d.rua, number: d.numero, complement: d.comp, district: d.bairro, city: d.cidade, state: d.uf }); } catch (e) { /* já existe */ }
       } catch (err) { console.warn('[Vellure] pedido no banco falhou, seguindo pelo WhatsApp', err); }
     }
-    const msg = `Olá, Vellure! ${code ? `Acabei de fazer o pedido ${code}` : 'Quero finalizar meu pedido'}:\n\n${lines.join('\n')}\n\nFrete: ${ship ? `${ship.label}, ${ship.price ? money(ship.price) : 'cortesia'}` : 'a combinar'}\nPagamento: ${pay === 'pix' ? 'Pix (5% off)' : 'Cartão de crédito'}\nTotal: ${money(t.total)}\n\nEntrega para ${d.nome}: ${addrTxt}`;
+    if (!code) code = 'VL' + Date.now().toString(36).toUpperCase().slice(-6);
+    const pagto = pay === 'pix' ? `Pix (${Math.round(PIX * 100)}% off)` : `Dinheiro na entrega${troco ? `, troco para ${money(troco)}` : ''}`;
+    const msg = `Olá, Vellure! Pedido ${code}:\n\n${lines.join('\n')}\n\nFrete: ${ship ? `${ship.label}, ${ship.price ? money(ship.price) : 'cortesia'}` : 'a combinar'}${coupon ? `\nCupom: ${coupon.code}` : ''}\nPagamento: ${pagto}\nTotal: ${money(total)}\n\nEntrega para ${d.nome}: ${addrTxt}`;
     view = 'done';
-    $('#bag h2').textContent = 'Pedido feito';
-    $('#bagItems').innerHTML = `<div class="done">
-      <svg viewBox="0 0 100 100" class="done-mark" aria-hidden="true"><circle cx="50" cy="50" r="46"/><path d="M24 26 C34 28 38 40 44 56 C47 64 49 72 50 78 M76 26 C66 28 62 40 56 56 C53 64 51 72 50 78"/></svg>
-      <strong>${code ? `Pedido ${esc(code)}` : 'Quase lá'}</strong>
-      <p>${code ? 'Recebemos seu pedido. A concierge confirma tudo e envia o pagamento pelo WhatsApp. Você acompanha cada etapa na sua conta.' : 'Envie a mensagem pronta no WhatsApp e a concierge confirma frete e pagamento com você.'}</p></div>`;
-    $('#bagFoot').innerHTML = `<a class="btn-gold" href="${esc(waLink(msg))}" target="_blank" rel="noopener">${code ? 'Avisar a concierge no WhatsApp' : 'Abrir o WhatsApp'}</a>${code ? '<a class="btn-line" href="conta.html#pedidos">Acompanhar meu pedido</a>' : ''}`;
-    if (code) { bag = []; save(); }
+    $('#bag h2').textContent = pay === 'pix' ? 'Pague com Pix' : 'Pedido confirmado';
+    const done = (body, foot) => { $('#bagItems').innerHTML = body; $('#bagFoot').innerHTML = foot; };
+    if (pay === 'pix') {
+      const ready = pixReady(), payload = ready ? pixPayload(total, code) : '';
+      done(`<div class="pix">
+          <p class="pix-code">Pedido <b>${esc(code)}</b></p>
+          <p class="pix-amt">${money(total)}</p>
+          ${ready ? `<div class="pix-qr" id="pixQr"><span class="pix-load"></span></div>
+          <p class="pix-timer">Pague em até <b id="pixTimer">${PAYCFG.PIX_MINUTES || 30}:00</b> para garantir as peças.</p>
+          <button type="button" class="btn-line pix-copy" id="pixCopy" data-code="${esc(payload)}">Copiar código Pix</button>
+          <ol class="pix-steps"><li>Abra o app do seu banco e escolha Pix.</li><li>Escaneie o QR Code ou cole o código.</li><li>Confira o valor e confirme. Depois toque em “Já paguei”.</li></ol>`
+          : '<p class="pix-note">A concierge envia a chave Pix com o valor exato pelo WhatsApp em instantes.</p>'}
+        </div>`,
+        `<a class="btn-gold" href="${esc(waLink(msg + '\n\n' + (ready ? 'Já paguei o Pix, segue o comprovante.' : 'Pode me enviar a chave Pix?')))}" target="_blank" rel="noopener">${ready ? 'Já paguei, enviar comprovante' : 'Receber a chave Pix'}</a>${saved ? '<a class="btn-line" href="conta.html#pedidos">Acompanhar meu pedido</a>' : ''}`);
+      if (ready) {
+        pixQrSvg(payload).then((svg) => { $('#pixQr').innerHTML = svg; }).catch(() => { $('#pixQr').innerHTML = '<p class="pix-note">Use o código copia e cola abaixo.</p>'; });
+        $('#pixCopy').addEventListener('click', async (e) => { try { await navigator.clipboard.writeText(e.currentTarget.dataset.code); } catch (err) { const ta = document.createElement('textarea'); ta.value = e.currentTarget.dataset.code; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } e.currentTarget.textContent = 'Código copiado'; haptic(15); toast('Código Pix copiado. Cole no app do seu banco.'); });
+        const end = Date.now() + (PAYCFG.PIX_MINUTES || 30) * 60000;
+        const tick = () => { const el = $('#pixTimer'); if (!el) return; const left = Math.max(0, end - Date.now()); el.textContent = `${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}`; if (left > 0) setTimeout(tick, 1000); else el.textContent = 'prazo encerrado, fale com a concierge'; };
+        tick();
+      }
+    } else {
+      done(`<div class="done">
+          <svg viewBox="0 0 100 100" class="done-mark" aria-hidden="true"><circle cx="50" cy="50" r="46"/><path d="M24 26 C34 28 38 40 44 56 C47 64 49 72 50 78 M76 26 C66 28 62 40 56 56 C53 64 51 72 50 78"/></svg>
+          <strong>Pedido ${esc(code)}</strong>
+          <p>Pagamento em dinheiro de <b>${money(total)}</b> na entrega ou na retirada${troco ? `, com troco para ${money(troco)}` : ''}. A concierge confirma o horário com você.</p></div>`,
+        `<a class="btn-gold" href="${esc(waLink(msg))}" target="_blank" rel="noopener">Confirmar com a concierge</a>${saved ? '<a class="btn-line" href="conta.html#pedidos">Acompanhar meu pedido</a>' : ''}`);
+    }
+    bag = []; coupon = null; save();
     haptic([20, 40, 20]);
-    if (!code) window.open(waLink(msg), '_blank', 'noopener');
   }
 
   $('#bagItems').addEventListener('click', (e) => {
@@ -281,7 +329,14 @@ export function createShop({ catalog, lock, unlock, chime }) {
   scrim.addEventListener('click', closeBag);
   addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (sheet.classList.contains('open')) return closeSheet(); closeBag(); close(); } });
 
-  save(); renderGrid();
+  function paintSeen() {
+    const box = $('#seen'); if (!box) return;
+    const list = local.get('vellure_vistos', []).map((x) => bySlug.get(x)).filter(Boolean);
+    box.hidden = list.length < 2;
+    $('#seenRow').innerHTML = list.map((p) => `<button type="button" data-slug="${esc(p.slug)}"><img src="${esc(p.imgs[0])}" alt="" loading="lazy"><span>${esc(p.name)}<br>${money(p.price)}</span></button>`).join('');
+  }
+  $('#seenRow') && $('#seenRow').addEventListener('click', (e) => { const b = e.target.closest('[data-slug]'); if (b) open(b.dataset.slug); });
+  save(); renderGrid(); paintSeen();
   if (/[?&]sacola=1/.test(location.search)) setTimeout(() => { view = 'checkout'; openBag(); }, 800);
   return { open, close, renderGrid, openBag, add, bySlug };
 }

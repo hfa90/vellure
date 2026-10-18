@@ -7,6 +7,7 @@
   <meta name="description" content="Acompanhe seus pedidos, favoritos e medidas na Maison Vellure.">
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#140a10">
+  <script src="js/theme.js"></script>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
@@ -33,7 +34,7 @@
       <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="ng" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ecd3a2"/><stop offset="1" stop-color="#a07a42"/></linearGradient></defs><circle cx="50" cy="50" r="46" fill="none" stroke="url(#ng)" stroke-width="2"/><path d="M24 26 C34 28 38 40 44 56 C47 64 49 72 50 78" fill="none" stroke="url(#ng)" stroke-width="5" stroke-linecap="round"/><path d="M76 26 C66 28 62 40 56 56 C53 64 51 72 50 78" fill="none" stroke="url(#ng)" stroke-width="2.4" stroke-linecap="round"/><path d="M50 12 L55 20 L50 28 L45 20 Z" fill="url(#ng)"/></svg>
       <span>VELLURE</span>
     </a>
-    <div class="nav-tools"><button class="btn-text" id="outBtn" type="button" hidden>Sair</button></div>
+    <div class="nav-tools"><button class="nav-theme" type="button" data-theme-toggle aria-label="Mudar para o modo claro"><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><button class="btn-text" id="outBtn" type="button" hidden>Sair</button></div>
   </header>
 
   <main id="ct" class="ct" aria-live="polite">
@@ -47,6 +48,7 @@
   <script src="js/config.js"></script>
   <script src="js/data.js"></script>
   <script src="js/catalog.js"></script>
+  <script src="js/lgpd.js" defer></script>
   <script type="module" src="js/v3d/conta.js"></script>
   <script>if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 </body>

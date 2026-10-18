@@ -47,8 +47,8 @@ function setupScroll() {
   requestAnimationFrame(raf);
 }
 let locks = 0;
-const lock = () => { locks++; lenis ? lenis.stop() : (document.body.style.overflow = 'hidden'); };
-const unlock = () => { locks = Math.max(0, locks - 1); if (!locks) { lenis ? lenis.start() : (document.body.style.overflow = ''); } };
+const lock = () => { locks++; document.body.classList.add('lockui'); lenis ? lenis.stop() : (document.body.style.overflow = 'hidden'); };
+const unlock = () => { locks = Math.max(0, locks - 1); if (!locks) { document.body.classList.remove('lockui'); lenis ? lenis.start() : (document.body.style.overflow = ''); } };
 function go(target) {
   const el = typeof target === 'string' ? $(target) : target; if (!el) return;
   if (lenis) lenis.scrollTo(el, { duration: 1.8, easing: (t) => 1 - Math.pow(1 - t, 4) });
@@ -325,6 +325,7 @@ async function boot() {
       if (cursor) cursor.label(locks ? '' : hoverP ? 'Ver' : galVis > 0.6 && HOVER ? 'Arraste' : '');
     }
     bar.style.transform = `scaleY(${galProg})`;
+    document.body.classList.toggle('in-gal', galVis > 0.4);
     const n = Math.floor(smooth(0.18, 0.62, pMan) * words.length);
     if (n !== lit) { words.forEach((w, i) => { w.style.opacity = i < n ? 1 : 0.12; w.style.transition = 'opacity .5s'; }); lit = n; }
     requestAnimationFrame(direct);
@@ -382,6 +383,38 @@ async function boot() {
   if (m) setTimeout(() => shop.open(decodeURIComponent(m[1]), false), 600);
 
   addEventListener('resize', sizeGallery);
+
+  /* ---------- busca instantânea ---------- */
+  const sEl = $('#search'), sIn = $('#searchIn'), sRes = $('#searchRes');
+  const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const SYN = { corset: 'espartilho', espartilho: 'corset', biquini: 'praia', maio: 'praia', calcinha: 'tanga', top: 'conjunto', fitness: 'legging bermuda calca', praia: 'biquini maio' };
+  const index = catalog.map((p) => ({ p, t: norm(`${p.name} ${p.color} ${CAT_NAME[p.cat]} ${p.cat}`) }));
+  let sSel = 0, sList = [];
+  function runSearch() {
+    const q = norm(sIn.value).trim();
+    const words = q.split(/\s+/).filter(Boolean).map((w) => [w, ...(SYN[w] ? SYN[w].split(' ') : [])]);
+    sList = !q ? catalog.slice(0, 8) : index.filter(({ t }) => words.every((alts) => alts.some((a) => t.includes(a)))).map((x) => x.p);
+    sSel = 0;
+    const hl = (txt) => { let out = txt; q && q.split(/\s+/).forEach((w) => { if (w.length < 2) return; const i = norm(out).indexOf(w); if (i >= 0) out = out.slice(0, i) + '<mark>' + out.slice(i, i + w.length) + '</mark>' + out.slice(i + w.length); }); return out; };
+    sRes.innerHTML = sList.length ? sList.slice(0, 24).map((p, i) => `<button type="button" class="sr-item ${i === 0 ? 'on' : ''}" data-slug="${p.slug}"><img src="${p.imgs[0]}" alt="" loading="lazy"><b>${hl(p.name)}</b><small>${hl(p.color || CAT_NAME[p.cat])}, ${money(p.price)}</small></button>`).join('') : `<p class="sr-empty">Nada com “${sIn.value}”. Tente outra palavra ou fale com a concierge: buscamos para você.</p>`;
+  }
+  $('#searchSug').innerHTML = ['corset', 'conjunto preto', 'biquíni', 'legging', 'camisola', 'branco', 'vinho'].map((t) => `<button type="button">${t}</button>`).join('');
+  $('#searchSug').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { sIn.value = b.textContent; runSearch(); sIn.focus(); } });
+  const openSearch = () => { sEl.classList.add('open'); sEl.setAttribute('aria-hidden', 'false'); lock(); runSearch(); setTimeout(() => sIn.focus(), 60); };
+  const closeSearch = () => { if (!sEl.classList.contains('open')) return; sEl.classList.remove('open'); sEl.setAttribute('aria-hidden', 'true'); unlock(); };
+  $('#searchBtn').addEventListener('click', openSearch);
+  $('#searchClose').addEventListener('click', closeSearch);
+  sIn.addEventListener('input', runSearch);
+  sRes.addEventListener('click', (e) => { const b = e.target.closest('[data-slug]'); if (b) { closeSearch(); shop.open(b.dataset.slug); } });
+  addEventListener('keydown', (e) => {
+    if (e.key === '/' && !/input|textarea/i.test(document.activeElement.tagName) && !sEl.classList.contains('open')) { e.preventDefault(); openSearch(); return; }
+    if (!sEl.classList.contains('open')) return;
+    if (e.key === 'Escape') closeSearch();
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { sSel = Math.min(sList.length - 1, sSel + 1); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { sSel = Math.max(0, sSel - 1); }
+    if (/Arrow/.test(e.key)) { e.preventDefault(); $$('.sr-item', sRes).forEach((b, i) => b.classList.toggle('on', i === sSel)); $$('.sr-item', sRes)[sSel]?.scrollIntoView({ block: 'nearest' }); }
+    if (e.key === 'Enter' && sList[sSel]) { closeSearch(); shop.open(sList[sSel].slug); }
+  });
 
   /* ---------- instalar como app (Android e iPhone) ---------- */
   const ib = $('#installBtn');

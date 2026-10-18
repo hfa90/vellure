@@ -7,6 +7,18 @@ window.VELLURE_CONFIG = {
   FREE_SHIPPING_FROM: 299,
   ATELIER: { name: 'Atelier Jardins', address: 'Rua Oscar Freire, São Paulo · SP' },
 
+  /* ---------- Pagamentos ---------- */
+  PAYMENTS: {
+    // Sua chave Pix (CPF, CNPJ, e-mail, telefone com +55 ou chave aleatória). Gera o QR Code com o valor exato do pedido.
+    PIX_KEY: '',
+    PIX_NAME: 'VELLURE',        // nome do recebedor (até 25 letras, sem acento)
+    PIX_CITY: 'SAO PAULO',      // cidade do recebedor (até 15 letras, sem acento)
+    PIX_DISCOUNT: 0.05,         // 5% de desconto no Pix
+    PIX_MINUTES: 30,            // prazo para pagar o Pix
+    CASH: true,                 // dinheiro na entrega ou na retirada
+    CARD: false                 // cartão de crédito: desativado por enquanto
+  },
+
   /* ---------- Box Misteriosa VIP (assinatura) ---------- */
   VIP: {
     // dia do mês em que as boxes saem do ateliê

@@ -102,6 +102,8 @@ export function createBox(canvas) {
   const dG = new THREE.BufferGeometry(); dG.setAttribute('position', new THREE.BufferAttribute(dP, 3));
   const dust = new THREE.Points(dG, new THREE.PointsMaterial({ color: '#f3d29b', size: 0.025, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
   scene.add(dust);
+  const applyTheme = (t) => { const l = t === 'claro'; dust.material.color.set(l ? '#a8814a' : '#f3d29b'); dust.material.blending = l ? THREE.NormalBlending : THREE.AdditiveBlending; dust.material.needsUpdate = true; rose.intensity = l ? 3 : 5; };
+  applyTheme(document.documentElement.dataset.theme); addEventListener('vellure-theme', (e) => applyTheme(e.detail));
 
   /* ---------- feixe de luz que sai da caixa ---------- */
   const beamMat = new THREE.ShaderMaterial({

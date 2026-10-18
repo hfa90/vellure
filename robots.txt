@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /conta.html
+Disallow: /legado.html
+Sitemap: https://hfa90.github.io/vellure/sitemap.xml

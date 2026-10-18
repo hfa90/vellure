@@ -43,6 +43,12 @@ const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t
 const damp = (a, b, k, dt) => lerp(a, b, 1 - Math.exp(-k * dt));
 
 /* paletas da seda: base escura, tom médio, brilho */
+export const PALETTES_LIGHT = {
+  noir: ['#e6d9cc', '#d6bca8', '#fff8f0'],
+  vinho: ['#e9d6d0', '#cfa1a4', '#fff4ee'],
+  perola: ['#efe4da', '#dcc0b0', '#fffbf5'],
+  rose: ['#ead7d4', '#d3a3ab', '#fff5f2']
+};
 export const PALETTES = {
   noir: ['#120a0f', '#3b1522', '#e9c891'],
   vinho: ['#1c060c', '#6e1b30', '#f2b9a8'],
@@ -62,6 +68,7 @@ export function createWorld(canvas, opts = {}) {
   renderer.toneMapping = THREE.NoToneMapping;
 
   const scene = new THREE.Scene();
+  const theme = { light: 0, bg: new THREE.Color('#140a10') };
   scene.background = new THREE.Color('#140a10');
   const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 80);
   camera.position.set(0, 0, 6);
@@ -162,7 +169,7 @@ export function createWorld(canvas, opts = {}) {
   pGeo.setAttribute('aRand', new THREE.BufferAttribute(aRand, 4));
   const pMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uP: { value: 0 }, uTime: { value: 0 }, uSize: { value: 22 * renderer.getPixelRatio() }, uScatter: { value: 0 }, uAlpha: { value: 1 } },
+    uniforms: { uP: { value: 0 }, uTime: { value: 0 }, uSize: { value: 22 * renderer.getPixelRatio() }, uScatter: { value: 0 }, uAlpha: { value: 1 }, uLightM: { value: 0 } },
     vertexShader: /* glsl */`
       uniform float uP, uTime, uSize, uScatter; attribute vec3 aStart; attribute vec4 aRand; varying float vA; varying float vM;
       void main(){
@@ -179,11 +186,11 @@ export function createWorld(canvas, opts = {}) {
         vA = (0.25 + 0.75 * p) * tw; vM = aRand.w;
       }`,
     fragmentShader: /* glsl */`
-      uniform float uAlpha; varying float vA; varying float vM;
+      uniform float uAlpha, uLightM; varying float vA; varying float vM;
       void main(){
         float d = length(gl_PointCoord - .5); float a = smoothstep(.5, 0., d); a *= a;
         vec3 col = mix(vec3(1., .8, .52), vec3(1., .66, .74), step(.72, vM)); col = mix(col, vec3(1., .97, .92), step(.94, vM));
-        gl_FragColor = vec4(col * 1.25, a * vA * uAlpha);
+        gl_FragColor = vec4(mix(col * 1.25, col * vec3(.62, .45, .3), uLightM), a * vA * uAlpha);
       }`
   });
   const particles = new THREE.Points(pGeo, pMat);
@@ -195,7 +202,7 @@ export function createWorld(canvas, opts = {}) {
     uTime: { value: 0 }, uTouch: { value: new THREE.Vector3(0, 0, 0) },
     uRip: { value: Array.from({ length: 6 }, () => new THREE.Vector3(0, 0, -100)) },
     uA: { value: new THREE.Color(PALETTES.noir[0]) }, uB: { value: new THREE.Color(PALETTES.noir[1]) }, uC: { value: new THREE.Color(PALETTES.noir[2]) },
-    uDim: { value: 0 }, uLight: { value: new THREE.Vector2(0.4, 0.6) }, uCam: { value: camera.position }
+    uDim: { value: 0 }, uLight: { value: new THREE.Vector2(0.4, 0.6) }, uCam: { value: camera.position }, uBase: { value: new THREE.Color('#140a10') }
   };
   const silk = new THREE.Mesh(
     new THREE.PlaneGeometry(34, 20, mobile ? 90 : 140, mobile ? 52 : 80),
@@ -230,7 +237,7 @@ export function createWorld(canvas, opts = {}) {
           gl_Position = projectionMatrix * viewMatrix * w;
         }`,
       fragmentShader: /* glsl */`
-        uniform vec3 uA, uB, uC, uCam; uniform float uDim; uniform vec2 uLight;
+        uniform vec3 uA, uB, uC, uCam, uBase; uniform float uDim; uniform vec2 uLight;
         varying vec3 vN; varying vec3 vW; varying vec2 vUv; varying float vH;
         void main(){
           vec3 N = normalize(vN); vec3 V = normalize(uCam - vW);
@@ -245,7 +252,7 @@ export function createWorld(canvas, opts = {}) {
           float sheen = pow(sqrt(max(1. - th * th, 0.)), 240.);
           col += uC * (sheen * .32 + pow(max(dot(N, H1), 0.), 140.) * .45);
           col += uB * fres * .22;
-          gl_FragColor = vec4(col * uDim, 1.);
+          gl_FragColor = vec4(mix(uBase, col, uDim), 1.);
         }`
     })
   );
@@ -265,13 +272,13 @@ export function createWorld(canvas, opts = {}) {
   dGeo.setAttribute('aR', new THREE.BufferAttribute(dR, 1));
   const dMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uTime: { value: 0 }, uSize: { value: 30 * renderer.getPixelRatio() }, uAlpha: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uSize: { value: 30 * renderer.getPixelRatio() }, uAlpha: { value: 0 }, uLightM: { value: 0 } },
     vertexShader: /* glsl */`uniform float uTime, uSize; attribute float aR; varying float vT;
       void main(){ vec3 p = position; p.y = mod(p.y + uTime * (.05 + aR * .12) + 5.5, 11.) - 5.5; p.x += sin(uTime * .3 + aR * 20.) * .3;
         vec4 mv = modelViewMatrix * vec4(p, 1.); gl_Position = projectionMatrix * mv;
         vT = .5 + .5 * sin(uTime * (1. + aR * 2.) + aR * 50.); gl_PointSize = uSize * (.2 + aR * .5) / -mv.z; }`,
-    fragmentShader: /* glsl */`uniform float uAlpha; varying float vT;
-      void main(){ float d = length(gl_PointCoord - .5); float a = smoothstep(.5, 0., d); gl_FragColor = vec4(vec3(1., .86, .62), a * a * vT * uAlpha * .8); }`
+    fragmentShader: /* glsl */`uniform float uAlpha, uLightM; varying float vT;
+      void main(){ float d = length(gl_PointCoord - .5); float a = smoothstep(.5, 0., d); gl_FragColor = vec4(mix(vec3(1., .86, .62), vec3(.66, .48, .28), uLightM), a * a * vT * uAlpha * .8); }`
   });
   const dust = new THREE.Points(dGeo, dMat); dust.frustumCulled = false; scene.add(dust);
 
@@ -300,7 +307,7 @@ export function createWorld(canvas, opts = {}) {
   const panelVS = /* glsl */`uniform float uVel, uHover; varying vec2 vUv;
     void main(){ vUv = uv; vec3 p = position; p.z += sin(uv.y * 3.1416) * uVel * .35 + sin(uv.x * 3.1416) * uHover * .1; p.y += sin(uv.x * 3.1416) * uVel * .06;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.); }`;
-  const panelFS = /* glsl */`uniform sampler2D uTex, uTex2; uniform float uHover, uFocus, uVel, uTime, uHas2, uAlpha, uImgA, uPlaneA, uMine; varying vec2 vUv;
+  const panelFS = /* glsl */`uniform sampler2D uTex, uTex2; uniform float uHover, uFocus, uVel, uTime, uHas2, uAlpha, uImgA, uPlaneA, uMine, uLightM; uniform vec3 uBg; varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
       return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -317,7 +324,7 @@ export function createWorld(canvas, opts = {}) {
       col += vec3(1., .8, .5) * edge * .9;
       float g = dot(col, vec3(.299, .587, .114));
       col = mix(vec3(g) * vec3(1.04, .95, .96), col, .25 + .75 * uFocus);
-      col *= .32 + .68 * uFocus;
+      col = mix(col * (.32 + .68 * uFocus), mix(uBg, col, .5 + .5 * uFocus), uLightM);
       vec2 e = min(vUv, 1. - vUv) * vec2(uPlaneA, 1.);
       float d = min(e.x, e.y);
       float frame = smoothstep(.006, 0., abs(d - .028));
@@ -343,7 +350,7 @@ export function createWorld(canvas, opts = {}) {
         transparent: true, depthWrite: false, side: THREE.DoubleSide, vertexShader: panelVS, fragmentShader: panelFS,
         uniforms: {
           uTex: { value: t.a || blank }, uTex2: { value: t.b || blank }, uHas2: { value: t.b ? 1 : 0 },
-          uHover: { value: 0 }, uFocus: { value: 0 }, uVel: { value: 0 }, uTime: { value: 0 }, uAlpha: { value: 0 }, uMine: { value: 0 },
+          uHover: { value: 0 }, uFocus: { value: 0 }, uVel: { value: 0 }, uTime: { value: 0 }, uAlpha: { value: 0 }, uMine: { value: 0 }, uLightM: { value: theme.light }, uBg: { value: theme.bg },
           uImgA: { value: t.a?.image ? t.a.image.width / t.a.image.height : 2 / 3 }, uPlaneA: { value: PW / PH }
         }
       });
@@ -387,12 +394,12 @@ export function createWorld(canvas, opts = {}) {
   const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.45, 0.5, 0.86);
   composer.addPass(bloom);
   const finish = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, uAberr: { value: 0.0025 }, uVig: { value: 0.85 }, uSeed: { value: 0 } },
+    uniforms: { tDiffuse: { value: null }, uAberr: { value: 0.0025 }, uVig: { value: 0.85 }, uSeed: { value: 0 }, uVigCol: { value: new THREE.Vector3(0, 0, 0) } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
-    fragmentShader: `uniform sampler2D tDiffuse; uniform float uAberr, uVig, uSeed; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float uAberr, uVig, uSeed; uniform vec3 uVigCol; varying vec2 vUv;
       void main(){ vec2 c = vUv - .5; float d = length(c); vec2 o = c * uAberr * d * 4.;
         vec3 col = vec3(texture2D(tDiffuse, vUv + o).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - o).b);
-        col *= 1. - smoothstep(.3, 1.0, d) * uVig;
+        col = mix(col, col * uVigCol, smoothstep(.3, 1.0, d) * uVig);
         float g = fract(sin(dot(vUv * 1000. + uSeed, vec2(12.9898, 78.233))) * 43758.5453) - .5; col += g * .025;
         gl_FragColor = vec4(col, 1.); }`
   });
@@ -570,11 +577,26 @@ export function createWorld(canvas, opts = {}) {
       if (fi !== gal.focus) { gal.focus = fi; handlers.focus(fi, gal.items[fi]); }
     } else if (gal.hovered !== -1) { gal.hovered = -1; handlers.hover(null); }
 
-    bloom.strength = params.bloom;
+    bloom.strength = params.bloom * (theme.light ? 0.3 : 1);
     finish.uniforms.uAberr.value = params.aberr; finish.uniforms.uSeed.value = (t * 60 | 0) % 97;
     composer.render();
   }
-  const PAL = Object.fromEntries(Object.entries(PALETTES).map(([k, v]) => [k, v.map((c) => new THREE.Color(c))]));
+  const mkPal = (src) => Object.fromEntries(Object.entries(src).map(([k, v]) => [k, v.map((c) => new THREE.Color(c))]));
+  const PAL_D = mkPal(PALETTES), PAL_L = mkPal(PALETTES_LIGHT);
+  let PAL = theme.light ? PAL_L : PAL_D;
+  function setTheme(mode) {
+    const light = mode === 'claro'; theme.light = light ? 1 : 0;
+    theme.bg.set(light ? '#ece2d8' : '#140a10');
+    scene.background.copy(theme.bg); silkU.uBase.value.copy(theme.bg);
+    PAL = light ? PAL_L : PAL_D;
+    pMat.uniforms.uLightM.value = theme.light; dMat.uniforms.uLightM.value = theme.light;
+    pMat.blending = dMat.blending = light ? THREE.NormalBlending : THREE.AdditiveBlending; pMat.needsUpdate = dMat.needsUpdate = true;
+    finish.uniforms.uVig.value = light ? 0.55 : 0.85; finish.uniforms.uVigCol.value.set(light ? 0.9 : 0, light ? 0.84 : 0, light ? 0.82 : 0);
+    panels.forEach((m) => { m.material.uniforms.uLightM.value = theme.light; });
+    key.intensity = light ? 1.9 : 1.6;
+  }
+  setTheme(document.documentElement.dataset.theme);
+  addEventListener('vellure-theme', (e) => setTheme(e.detail));
 
   let acc = 0, frames = 0, lastNow = performance.now(), slowStreak = 0;
   function adapt() {

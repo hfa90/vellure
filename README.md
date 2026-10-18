@@ -19,12 +19,18 @@ HTML, CSS e JavaScript puros (módulos ES), Three.js r160, GSAP e Lenis, tudo se
 | Simulador de tamanho (manequim que se molda) e de frete (jornada do pacote) | `js/v3d/atelier.js` |
 | Box Misteriosa VIP: caixa 3D, perfil de curadoria inteligente, planos recorrentes | `assinatura.html`, `js/v3d/vip.js`, `js/v3d/vipbox.js` |
 | Meu tamanho gravado: destaque dourado na galeria e no closet, filtro "No meu tamanho" | `js/v3d/common.js` (mySize), `js/v3d/atelier.js` |
+| Modo claro premium (pérola rosada) e modo escuro, com a cena 3D acompanhando | `js/theme.js`, `css/v3d.css` |
+| Checkout com Pix (QR Code e copia e cola com valor exato) e dinheiro na entrega; cartão desativado | `js/v3d/pix.js`, `js/v3d/shop.js`, `js/config.js` → `PAYMENTS` |
+| Busca instantânea (tecla /), cupom, vistos recentemente, compartilhar peça, concierge flutuante | `js/v3d/main.js`, `js/v3d/shop.js` |
+| Privacidade (LGPD), políticas de trocas e entregas, SEO (sitemap, robots, dados estruturados) | `js/lgpd.js`, `politicas.html`, `sitemap.xml`, `robots.txt` |
 | App instalável no iPhone e Android (PWA) | `manifest.webmanifest`, `sw.js`, `assets/icons/` |
 | E-mails da conta com a identidade da Maison | `supabase/emails/` |
 | Painel administrativo (Supabase) | `admin.html` |
 | Loja antiga, mantida só como referência | `legado.html` |
 
 ## Configurar
+
+0. **Pix:** em `js/config.js` → `PAYMENTS`, preencha `PIX_KEY` (sua chave), `PIX_NAME` e `PIX_CITY`. Com a chave preenchida, o checkout gera o QR Code e o copia e cola com o valor exato e o número do pedido. Sem chave, a concierge envia o Pix pelo WhatsApp. Dinheiro na entrega fica ligado em `CASH: true`; o cartão volta quando `CARD: true`.
 
 1. **WhatsApp da concierge:** troque `WHATSAPP` em `js/config.js` (formato `55DDDNÚMERO`). Os pedidos da sacola chegam nesse número já com peças, tamanhos e totais.
 2. **Supabase (opcional, para o painel):** rode `supabase/schema.sql` e depois `supabase/produtos_reais.sql` no SQL Editor. O segundo cadastra as 50 peças reais com as fotos e esconde os produtos fictícios. A partir daí, produtos com foto cadastrados no painel aparecem automaticamente na loja 3D.

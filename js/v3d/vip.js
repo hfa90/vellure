@@ -7,6 +7,8 @@ import { createBox } from './vipbox.js';
 import { $, $$, esc, money, waLink, toast, haptic, local, mySize, currentUser } from './common.js';
 import { mountSizeRecorder } from './atelier.js';
 import { hasWebGL } from './scene.js';
+import { pixReady, pixPayload, pixQrSvg } from './pix.js';
+const PAYCFG = (window.VELLURE_CONFIG || {}).PAYMENTS || {};
 
 const V = window.V || {};
 const VIP = (window.VELLURE_CONFIG || {}).VIP;
@@ -178,10 +180,10 @@ function paintCheckout() {
     </div>
     <div class="ck-r">
       <p class="ck-price"><span>${money(m)}</span> por mês</p>
-      <p class="ck-bill">${c.months > 1 ? `Cobrança recorrente de ${money(m * c.months)} a cada ${c.months} meses.` : 'Cobrança recorrente todo mês.'} Pause, pule ou cancele na sua conta.</p>
+      <p class="ck-bill">${c.months > 1 ? `Cobrança de ${money(m * c.months)} a cada ${c.months} meses.` : 'Cobrança todo mês.'} Pause, pule ou cancele na sua conta.</p>
       <button type="button" class="btn-gold" id="subscribe" ${ready ? '' : 'disabled'}>${user ? 'Assinar agora' : 'Entrar e assinar'}</button>
       ${ready ? '' : '<p class="ck-miss">Complete o seu perfil de curadoria para assinar.</p>'}
-      <p class="ck-safe">Pagamento seguro e recorrente pelo Mercado Pago. A primeira box sai em ${fmtD(ship)}.</p>
+      <p class="ck-safe">${PAYCFG.CARD ? 'Pagamento recorrente no cartão.' : 'Primeira cobrança via Pix agora. Nas próximas, o Pix do ciclo chega no seu WhatsApp. Cartão recorrente em breve.'} A primeira box sai em ${fmtD(ship)}.</p>
     </div>`;
 }
 $('#checkout').addEventListener('click', async (e) => {
@@ -193,14 +195,21 @@ $('#checkout').addEventListener('click', async (e) => {
   const prefs = { ...prof, tamanho: mySize.get(), plano: p.name, ciclo: cycle, meses: c.months, valor_mensal: p.prices[cycle], sugestoes: picks().map((x) => x.p.slug) };
   let ok = false;
   try { await V.api.subscribe(slug(), prefs); ok = true; } catch (err) { console.warn('[Vellure] assinatura no banco falhou', err); }
-  const link = VIP.PAY_LINKS[slug()];
-  const msg = `Olá, Vellure! Quero assinar a ${p.name} (${c.label.toLowerCase()}, ${money(p.prices[cycle])}/mês).\nEstilo: ${STYLE_NAME[prof.estilo]}. Cores: ${prof.cores.join(', ')}. Tamanho: ${prefs.tamanho.top}/${prefs.tamanho.bottom}.${prof.obs ? `\nObservação: ${prof.obs}` : ''}`;
+  const link = PAYCFG.CARD ? VIP.PAY_LINKS[slug()] : '';
+  const first = p.prices[cycle] * c.months, code = 'VIP' + Date.now().toString(36).toUpperCase().slice(-6);
+  const msg = `Olá, Vellure! Quero assinar a ${p.name} (${c.label.toLowerCase()}, ${money(p.prices[cycle])}/mês). Código ${code}.\nEstilo: ${STYLE_NAME[prof.estilo]}. Cores: ${prof.cores.join(', ')}. Tamanho: ${prefs.tamanho.top}/${prefs.tamanho.bottom}.${prof.obs ? `\nObservação: ${prof.obs}` : ''}`;
   if (box) { celebrating = true; box.place(0, MOBILE ? -1.4 : -1.2, MOBILE ? 0.5 : 0.62); setTimeout(() => box.celebrate(), 500); setTimeout(() => (celebrating = false), 9000); }
   haptic([20, 40, 20, 40, 60]);
+  const usePix = !link && pixReady(), payload = usePix ? pixPayload(first, code) : '';
   $('#checkout').innerHTML = `<div class="ck-done">
     <h2>Bem-vinda ao clube.</h2>
-    <p>${ok ? 'Sua assinatura foi registrada e a stylist já recebeu o seu perfil.' : 'Seu perfil está pronto.'} ${link ? 'Finalize o pagamento recorrente para confirmar.' : 'A concierge envia o pagamento recorrente pelo WhatsApp.'}</p>
-    <div class="ck-actions">${link ? `<a class="btn-gold" href="${esc(link)}" target="_blank" rel="noopener">Pagar com Mercado Pago</a>` : `<a class="btn-gold" href="${esc(waLink(msg))}" target="_blank" rel="noopener">Confirmar com a concierge</a>`}<a class="btn-line" href="conta.html#vip">Ver minha assinatura</a></div></div>`;
+    <p>${ok ? 'Sua assinatura foi registrada e a stylist já recebeu o seu perfil.' : 'Seu perfil está pronto.'} ${link ? 'Finalize o pagamento recorrente para confirmar.' : usePix ? `Pague a primeira cobrança de <b>${money(first)}</b> com Pix para confirmar.` : 'A concierge envia o Pix da primeira cobrança pelo WhatsApp.'}</p>
+    ${usePix ? `<div class="pix pix-vip"><div class="pix-qr" id="vipQr"><span class="pix-load"></span></div><button type="button" class="btn-line pix-copy" id="vipCopy">Copiar código Pix</button></div>` : ''}
+    <div class="ck-actions">${link ? `<a class="btn-gold" href="${esc(link)}" target="_blank" rel="noopener">Pagar no cartão</a>` : `<a class="btn-gold" href="${esc(waLink(msg + (usePix ? '\nJá paguei o Pix, segue o comprovante.' : '\nPode me enviar o Pix?')))}" target="_blank" rel="noopener">${usePix ? 'Já paguei, enviar comprovante' : 'Receber o Pix'}</a>`}<a class="btn-line" href="conta.html#vip">Ver minha assinatura</a></div></div>`;
+  if (usePix) {
+    pixQrSvg(payload).then((svg) => { $('#vipQr').innerHTML = svg; }).catch(() => {});
+    $('#vipCopy').addEventListener('click', async (e) => { try { await navigator.clipboard.writeText(payload); } catch (err) { /* */ } e.currentTarget.textContent = 'Código copiado'; toast('Código Pix copiado.'); });
+  }
   if (link) window.open(link, '_blank', 'noopener');
 });
 

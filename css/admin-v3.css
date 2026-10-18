@@ -1,0 +1,9 @@
+/* VELLURE · painel com a paleta nova (pérola rosada + ameixa + champagne) */
+body.admin { background: #ece2d8; }
+.adm aside { background: #140a10; }
+.pane, .kcard { background: #f7f1eb; border-color: rgba(128, 90, 46, .2); border-radius: 18px; }
+.kcard.dark { background: #1f0f18; border-color: #1f0f18; }
+.tbl tr.click:hover td { background: #f1e7de; }
+.adm .top h1 em { color: #7a2a3c; }
+.gate { background: radial-gradient(120% 80% at 70% 0%, #4a1424, #140a10 60%) !important; }
+.gate .box { border-radius: 26px; background: #f7f1eb; }

@@ -5,7 +5,7 @@ export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const money = (n) => (+n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 export const CAT_NAME = { lingerie: 'Lingerie', corset: 'Corsets', praia: 'Moda praia', fitness: 'Fitness' };
-export const PIX = 0.05;
+export const PIX = +(((window.VELLURE_CONFIG || {}).PAYMENTS || {}).PIX_DISCOUNT ?? 0.05);
 export const HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-9-9.2C1.6 7.2 4 4 7.2 4c2 0 3.5 1.1 4.8 2.8C13.3 5.1 14.8 4 16.8 4 20 4 22.4 7.2 21 10.8 19 15.6 12 20 12 20z"/></svg>';
 
 export function waLink(text) {
