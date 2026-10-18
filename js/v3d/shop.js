@@ -1,7 +1,7 @@
 /* =====================================================================
    VELLURE 3D · loja: closet, página da peça, favoritos, sacola e pedido
    ===================================================================== */
-import { $, $$, esc, money, CAT_NAME, PIX, HEART, waLink, toast, haptic, local, favs } from './common.js';
+import { $, $$, esc, money, CAT_NAME, PIX, HEART, waLink, toast, haptic, local, favs, mySize } from './common.js';
 import { mountSizer, mountFrete, loadMeasures, sizeCalc } from './atelier.js';
 export { money, CAT_NAME, waLink, toast };
 
@@ -17,9 +17,10 @@ export function createShop({ catalog, lock, unlock, chime }) {
   let gridFilter = 'all';
   function renderGrid(filter = gridFilter) {
     gridFilter = filter;
-    const list = catalog.filter((p) => filter === 'all' || p.cat === filter);
-    grid.innerHTML = list.length ? list.map((p) => `
-      <article class="card" data-slug="${esc(p.slug)}">
+    const list = catalog.filter((p) => filter === 'all' || (filter === 'mine' ? mySize.fits(p) : p.cat === filter));
+    grid.innerHTML = list.length ? list.map((p) => { const mine = mySize.fits(p); return `
+      <article class="card${mine ? ' mine' : ''}" data-slug="${esc(p.slug)}">
+        ${mine ? `<span class="mine-tag"><i></i>${mine === 'Único' ? 'Tamanho único, serve em você' : `Tem o seu tamanho ${esc(mine)}`}</span>` : ''}
         <div class="card-media" role="button" tabindex="0" aria-label="Ver ${esc(p.name)}">
           <img class="a" src="${esc(p.imgs[0])}" alt="${esc(p.name)} ${esc(p.color)}" loading="lazy" decoding="async">
           ${p.imgs[1] ? `<img class="b" src="${esc(p.imgs[1])}" alt="" loading="lazy" decoding="async">` : ''}
@@ -27,7 +28,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
         </div>
         <button class="fav card-fav" type="button" aria-pressed="${favs.has(p.slug)}" aria-label="Favoritar ${esc(p.name)}">${HEART}</button>
         <div class="card-info"><h3 class="card-name">${esc(p.name)}<span class="card-color">${esc(p.color || CAT_NAME[p.cat])}</span></h3><span class="card-price">${money(p.price)}</span></div>
-      </article>`).join('') : '<p class="vs-empty">Nenhuma peça nesta categoria por enquanto.</p>';
+      </article>`; }).join('') : `<p class="vs-empty">${filter === 'mine' ? 'Nenhuma peça no seu tamanho gravado por enquanto. Fale com a concierge: pedimos sob encomenda.' : 'Nenhuma peça nesta categoria por enquanto.'}</p>`;
     if (window.gsap && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       gsap.fromTo(grid.children, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 1, stagger: 0.035, ease: 'expo.out' });
     }
@@ -49,9 +50,11 @@ export function createShop({ catalog, lock, unlock, chime }) {
   }
   favs.on(() => { $$('.card-fav', grid).forEach((b) => b.setAttribute('aria-pressed', String(favs.has(b.closest('.card').dataset.slug)))); if (current) $('#pdpFav').setAttribute('aria-pressed', String(favs.has(current.slug))); });
 
+  mySize.on(() => renderGrid());
+
   /* ---------------- tamanho sugerido ---------------- */
   function suggest(p, res) {
-    if (!res) { const m = loadMeasures(); if (!m) return null; res = sizeCalc(m); }
+    if (!res) { const f = mySize.fits(p); if (f && f !== 'Único') return f; const m = loadMeasures(); if (!m) return null; res = sizeCalc(m); }
     const want = p.cat === 'corset' ? res.body : res.panty;
     if (p.sizes.includes(want)) return want;
     const order = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'], wi = order.indexOf(want);
@@ -61,7 +64,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
     $('#pdpSizes').innerHTML = current.sizes.map((s) => `<button type="button" aria-pressed="${s === size}">${esc(s)}</button>`).join('');
     const mine = suggest(current);
     const el = $('#pdpMine');
-    if (mine && current.sizes.length > 1) { el.hidden = false; el.innerHTML = `Pelas suas medidas, o seu é o <b>${esc(mine)}</b>.`; } else el.hidden = true;
+    if (mine && current.sizes.length > 1) { el.hidden = false; el.innerHTML = mySize.fits(current) ? `Esta peça tem o seu tamanho gravado: <b>${esc(mine)}</b>. Já deixamos marcado.` : `Pelas suas medidas, o seu é o <b>${esc(mine)}</b>.`; } else el.hidden = true;
   }
 
   /* ---------------- página da peça ---------------- */
@@ -74,7 +77,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
   }
   function open(slug, push = true) {
     const p = bySlug.get(slug); if (!p) return;
-    current = p; size = p.sizes.length === 1 ? p.sizes[0] : null;
+    current = p; size = p.sizes.length === 1 ? p.sizes[0] : (mySize.fits(p) || null);
     $('#pdpCat').textContent = CAT_NAME[p.cat] || '';
     $('#pdpName').textContent = p.name;
     $('#pdpColor').textContent = p.color || '';

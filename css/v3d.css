@@ -482,3 +482,84 @@ input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border: 0; bo
   .fr-steps { grid-template-columns: 1fr 1fr; }
   .card-fav { width: 34px; height: 34px; top: 8px; right: 8px; }
 }
+
+/* =====================================================================
+   v3 · meu tamanho gravado
+   ===================================================================== */
+@property --ang { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.vs-tt { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.size-pill { display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 999px; border: 1px dashed var(--champ); color: var(--champ); font-size: 13px; letter-spacing: .02em; background: rgba(20, 10, 16, .55); transition: all .4s var(--ease); }
+.size-pill:hover { background: rgba(216, 189, 136, .12); }
+.size-pill .sp-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--champ); }
+.size-pill.on { border-style: solid; color: var(--nuit); background: linear-gradient(120deg, #f3dcae, var(--champ) 50%, var(--champ-deep)); }
+.size-pill.on .sp-dot { background: var(--nuit); border-color: var(--nuit); }
+.gl-pill { order: 3; }
+.chip-mine { border-color: var(--champ); color: var(--champ); }
+.chip-mine.on { background: linear-gradient(120deg, #f3dcae, var(--champ)); }
+
+.card.mine .card-media { outline: 0; }
+.card.mine .card-media::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none; z-index: 1;
+  background: conic-gradient(from var(--ang), #a07a42, #fff1d4, #d8bd88, #a07a42 40%, #f3dcae 60%, #a07a42);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: spinBorder 4s linear infinite;
+}
+@keyframes spinBorder { to { --ang: 360deg; } }
+.card.mine .card-media { box-shadow: 0 0 0 1px rgba(216, 189, 136, .25), 0 18px 60px -22px rgba(216, 189, 136, .55); }
+.mine-tag, .mine-badge { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: .02em; color: var(--nuit); background: linear-gradient(120deg, #f3dcae, var(--champ) 55%, #c79f62); border-radius: 999px; padding: 6px 12px 6px 10px; white-space: nowrap; }
+.mine-tag i, .mine-badge i { width: 14px; height: 14px; border-radius: 50%; background: var(--nuit); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat; }
+.mine-tag { position: absolute; z-index: 3; top: 12px; left: 12px; box-shadow: 0 6px 24px -8px rgba(0, 0, 0, .5); }
+.mine-badge { margin: 8px 0 0; }
+.gl-caption .mine-badge { display: flex; width: max-content; }
+.gl-caption .mine-badge[hidden] { display: none; }
+
+.sr { display: grid; gap: 20px; }
+.sr-lead { margin: 0; color: var(--mute); max-width: 56ch; }
+.sr-row { display: grid; gap: 10px; }
+.sr-row > span { font-size: 13px; color: var(--mute); }
+.sr-chips { display: flex; gap: 10px; flex-wrap: wrap; }
+.sr-chips button { min-width: 56px; height: 56px; border-radius: 50%; border: 1px solid var(--line); font-size: 15px; transition: all .3s var(--ease); }
+.sr-chips button:hover { border-color: var(--champ); }
+.sr-chips button[aria-pressed="true"] { background: linear-gradient(140deg, #f3dcae, var(--champ) 50%, var(--champ-deep)); color: var(--nuit); border-color: transparent; transform: scale(1.06); }
+.sr-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.sr-actions .btn-gold { width: auto; flex: 1 1 220px; }
+.sr-sizer { border-top: 1px solid var(--line); padding-top: 20px; }
+@media (max-width: 760px) { .mine-tag { font-size: 11px; padding: 5px 10px 5px 8px; top: 8px; left: 8px; max-width: calc(100% - 56px); overflow: hidden; text-overflow: ellipsis; } .sr-chips button { min-width: 48px; height: 48px; } }
+
+/* =====================================================================
+   v3 · chamada da Box VIP (caixa em CSS 3D)
+   ===================================================================== */
+.vip-teaser { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(30px, 6vw, 100px); align-items: center; padding: 14vh var(--gutter); background: radial-gradient(80% 90% at 25% 50%, rgba(74, 20, 36, .9), rgba(20, 10, 16, .88) 70%); }
+.vt-copy h2 { margin: 0; font: 300 clamp(44px, 6.4vw, 100px)/.95 var(--serif); }
+.vt-copy p { color: var(--mute); max-width: 42ch; font-size: 17px; }
+.vt-price b { color: var(--champ); font-weight: 400; }
+.vt-copy .btn-gold { width: auto; display: inline-block; padding: 17px 34px; margin-top: 10px; }
+.vt-stage { display: grid; place-items: center; height: 420px; perspective: 1000px; }
+.vt-cube { --s: 200px; position: relative; width: var(--s); height: calc(var(--s) * .62); transform-style: preserve-3d; animation: vtSpin 14s linear infinite; }
+.vt-stage:hover .vt-cube { animation-play-state: paused; }
+@keyframes vtSpin { from { transform: rotateX(-24deg) rotateY(0); } to { transform: rotateX(-24deg) rotateY(360deg); } }
+.vt-cube .f { position: absolute; display: block; background: linear-gradient(135deg, #4e1428, #2a0a16); box-shadow: inset 0 0 40px rgba(0, 0, 0, .45); }
+.vt-cube .f::after { content: ''; position: absolute; background: linear-gradient(90deg, #a07a42, #f3dcae 50%, #a07a42); }
+.vt-cube > .fr, .vt-cube > .bk, .vt-cube > .lf, .vt-cube > .rt { width: var(--s); height: 100%; }
+.vt-cube > .fr { transform: translateZ(calc(var(--s) / 2)); }
+.vt-cube > .bk { transform: rotateY(180deg) translateZ(calc(var(--s) / 2)); }
+.vt-cube > .lf { transform: rotateY(-90deg) translateZ(calc(var(--s) / 2)); }
+.vt-cube > .rt { transform: rotateY(90deg) translateZ(calc(var(--s) / 2)); }
+.vt-cube > .fr::after, .vt-cube > .bk::after, .vt-cube > .lf::after, .vt-cube > .rt::after { left: 44%; width: 12%; top: 0; bottom: 0; }
+.vt-cube > .bt { width: var(--s); height: var(--s); top: calc(var(--s) * .62 - var(--s) / 2); transform: rotateX(90deg); }
+.vt-lid { position: absolute; left: -6px; top: -14px; width: calc(var(--s) + 12px); height: 30px; transform-style: preserve-3d; transform-origin: 50% 0 calc((var(--s) + 12px) / -2); transition: transform 1s cubic-bezier(.3, 1.6, .5, 1); }
+.vt-stage:hover .vt-lid, .vt-stage:focus-visible .vt-lid { transform: rotateX(70deg) translateY(-20px); }
+.vt-lid .f { background: linear-gradient(135deg, #5c1830, #33101d); }
+.vt-lid .fr, .vt-lid .bk, .vt-lid .lf, .vt-lid .rt { width: 100%; height: 30px; }
+.vt-lid .fr { transform: translateZ(calc((var(--s) + 12px) / 2)); }
+.vt-lid .bk { transform: rotateY(180deg) translateZ(calc((var(--s) + 12px) / 2)); }
+.vt-lid .lf { transform: rotateY(-90deg) translateZ(calc((var(--s) + 12px) / 2)); }
+.vt-lid .rt { transform: rotateY(90deg) translateZ(calc((var(--s) + 12px) / 2)); }
+.vt-lid .fr::after, .vt-lid .bk::after, .vt-lid .lf::after, .vt-lid .rt::after { left: 44%; width: 12%; top: 0; bottom: 0; }
+.vt-lid .tp { width: 100%; height: calc(var(--s) + 12px); top: calc((var(--s) + 12px) / -2); transform: rotateX(90deg); }
+.vt-lid .tp::after { left: 44%; width: 12%; top: 0; bottom: 0; }
+.vt-lid .tp::before { content: ''; position: absolute; left: 0; right: 0; top: 44%; height: 12%; background: linear-gradient(#a07a42, #f3dcae 50%, #a07a42); }
+.vt-light { position: absolute; left: 50%; top: 0; width: 70%; height: 220px; transform: translate(-50%, -100%) rotateY(0); background: radial-gradient(50% 100% at 50% 100%, rgba(255, 226, 170, .85), rgba(255, 200, 140, 0) 70%); opacity: 0; transition: opacity .6s .2s; filter: blur(6px); pointer-events: none; }
+.vt-stage:hover .vt-light { opacity: 1; }
+@media (max-width: 760px) { .vip-teaser { grid-template-columns: 1fr; } .vt-stage { height: 300px; } .vt-cube { --s: 150px; } }
+@media (prefers-reduced-motion: reduce) { .vt-cube { animation: none; transform: rotateX(-24deg) rotateY(-30deg); } }

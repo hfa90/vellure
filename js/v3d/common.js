@@ -49,3 +49,40 @@ export const favs = {
   },
   on(fn) { listeners.add(fn); }
 };
+
+/* ---------- meu tamanho gravado ---------- */
+const sizeListeners = new Set();
+const ORDER = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG'];
+export const mySize = {
+  get() { return local.get('vellure_tamanho', null); },
+  async set(v) {
+    const val = v ? { ...v, at: Date.now() } : null;
+    local.set('vellure_tamanho', val); sizeListeners.forEach((f) => f(val));
+    try {
+      if (window.V?.state?.user) {
+        const p = await window.V.api.profile();
+        await window.V.api.updateProfile({ measurements: { ...(p?.measurements || {}), tamanho: val } });
+      }
+    } catch (e) { /* fica no aparelho */ }
+    return val;
+  },
+  async pull() {
+    try { if (!window.V?.state?.user) return; const p = await window.V.api.profile(); const t = p?.measurements?.tamanho; if (t && (!this.get() || (t.at || 0) > (this.get().at || 0))) { local.set('vellure_tamanho', t); sizeListeners.forEach((f) => f(t)); } } catch (e) { /* */ }
+  },
+  on(fn) { sizeListeners.add(fn); },
+  /** parte do corpo que manda no tamanho da peça */
+  part(p) {
+    const n = (p.name || '').toLowerCase();
+    if (p.cat === 'corset') return 'top';
+    if (/tanga|calcinha|legging|calça|bermuda|short/.test(n)) return 'bottom';
+    return 'top';
+  },
+  /** devolve o tamanho da cliente se a peça tiver, senão null */
+  fits(p, s = this.get()) {
+    if (!s) return null;
+    if (p.sizes.length === 1 && /único/i.test(p.sizes[0])) return 'Único';
+    const want = s[this.part(p)] || s.top || s.bottom;
+    return p.sizes.includes(want) ? want : null;
+  },
+  ORDER
+};

@@ -5,8 +5,8 @@
 import { createWorld, hasWebGL } from './scene.js';
 import { createShop, toast, waLink, money, CAT_NAME } from './shop.js';
 import { sound } from './sound.js';
-import { mountSizer, mountFrete } from './atelier.js';
-import { currentUser, favs, haptic } from './common.js';
+import { mountSizer, mountFrete, mountSizeRecorder } from './atelier.js';
+import { currentUser, favs, haptic, mySize } from './common.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -126,7 +126,7 @@ async function boot() {
     let name = u.user_metadata?.full_name || '';
     try { const p = await window.V.api.profile(); name = p?.full_name || name; } catch (e) { /* */ }
     $('#acctLbl').textContent = name ? `Olá, ${name.split(' ')[0]}` : 'Minha conta';
-    favs.sync();
+    favs.sync(); mySize.pull();
   });
 
   if (gl) {
@@ -228,7 +228,9 @@ async function boot() {
   const PER = MOBILE ? 70 : 90;
   function sizeGallery() { galerie.style.height = `${galItems.length * PER + innerHeight}px`; window.__vellureMeasure && window.__vellureMeasure(); }
   function setGal(f) {
-    galItems = f === 'all' ? catalog : catalog.filter((p) => p.cat === f);
+    galItems = f === 'all' ? catalog : catalog.filter((p) => (f === 'mine' ? mySize.fits(p) : p.cat === f));
+    if (!galItems.length) galItems = catalog;
+    if (world) world.setMine((p) => !!mySize.fits(p));
     if (world) world.setGallery(galItems);
     sizeGallery(); updateCaption(0, galItems[0]);
   }
@@ -237,6 +239,8 @@ async function boot() {
     $('#glCount').textContent = `${i + 1} de ${galItems.length}`;
     $('#glName').textContent = p.name;
     $('#glMeta').textContent = `${p.color ? p.color + ', ' : ''}${money(p.price)}`;
+    const mine = mySize.fits(p), mb = $('#glMine');
+    mb.hidden = !mine; if (mine) mb.innerHTML = `<i></i>${mine === 'Único' ? 'Tamanho único, serve em você' : `Tem o seu tamanho ${mine}`}`;
     $('#glOpen').dataset.slug = p.slug;
   }
   if (world) {
@@ -257,6 +261,26 @@ async function boot() {
     $$('.chips[data-target="vestiaire"] .chip').forEach((c) => c.classList.toggle('on', c.dataset.f === f));
     shop.renderGrid(f);
   }
+
+  /* ---------- gravar meu tamanho ---------- */
+  const sizeSheet = $('#sizeSheet');
+  const paintSize = (v = mySize.get()) => {
+    $$('[data-size-open] .sp-txt').forEach((t) => (t.textContent = v ? `Seu tamanho: ${v.top === v.bottom ? v.top : `${v.top} em cima, ${v.bottom} embaixo`}` : 'Gravar meu tamanho'));
+    $$('[data-size-open]').forEach((b) => b.classList.toggle('on', !!v));
+    $$('.chip-mine').forEach((c) => (c.hidden = !v));
+    if (world) world.setMine((p) => !!mySize.fits(p));
+    if (world && world.gal.items[world.gal.focus]) updateCaption(world.gal.focus, world.gal.items[world.gal.focus]);
+  };
+  const openSize = () => {
+    mountSizeRecorder($('#sizeSheetBody'), { onDone: (v) => { closeSize(); if (v) { toast('Tamanho gravado. As peças com o seu número agora brilham em dourado.'); } } });
+    sizeSheet.classList.add('open'); sizeSheet.setAttribute('aria-hidden', 'false'); lock();
+  };
+  const closeSize = () => { if (!sizeSheet.classList.contains('open')) return; sizeSheet.classList.remove('open'); sizeSheet.setAttribute('aria-hidden', 'true'); unlock(); };
+  $$('[data-size-open]').forEach((b) => b.addEventListener('click', openSize));
+  $('.sheet-close', sizeSheet).addEventListener('click', closeSize);
+  sizeSheet.addEventListener('click', (e) => { if (e.target === sizeSheet) closeSize(); });
+  mySize.on(paintSize); paintSize();
+  try { const V2 = window.VELLURE_CONFIG.VIP; const min = Math.min(...V2.PLANS.flatMap((p) => Object.values(p.prices))); $('#vtFrom').textContent = money(min); } catch (e) { /* */ }
 
   /* ---------- manifesto ---------- */
   const words = splitWords($('.mf-text'));
@@ -318,6 +342,7 @@ async function boot() {
     a.addEventListener('pointerenter', () => { prevImg.src = a.dataset.img; prev.classList.add('show'); });
     a.addEventListener('pointerleave', () => prev.classList.remove('show'));
     a.addEventListener('click', (e) => {
+      if (a.hasAttribute('data-out')) return;
       e.preventDefault(); toggleMenu(false);
       if (a.dataset.filter) filterCloset(a.dataset.filter);
       setTimeout(() => go(a.getAttribute('href')), 450);

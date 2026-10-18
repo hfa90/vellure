@@ -5,5 +5,30 @@ window.VELLURE_CONFIG = {
   BRAND: 'Vellure',
   WHATSAPP: '5511999999999',
   FREE_SHIPPING_FROM: 299,
-  ATELIER: { name: 'Atelier Jardins', address: 'Rua Oscar Freire, São Paulo · SP' }
+  ATELIER: { name: 'Atelier Jardins', address: 'Rua Oscar Freire, São Paulo · SP' },
+
+  /* ---------- Box Misteriosa VIP (assinatura) ---------- */
+  VIP: {
+    // dia do mês em que as boxes saem do ateliê
+    SHIP_DAY: 10,
+    CYCLES: {
+      mensal: { label: 'Mensal', months: 1, note: 'cobrança todo mês, cancele quando quiser' },
+      trimestral: { label: 'Trimestral', months: 3, note: 'cobrança a cada 3 meses' },
+      semestral: { label: 'Semestral', months: 6, note: 'cobrança a cada 6 meses' }
+    },
+    PLANS: [
+      { id: 'essencial', name: 'Box Essencial', desc: 'Uma lingerie surpresa por mês, escolhida para o seu estilo e o seu tamanho.',
+        prices: { mensal: 89.9, trimestral: 79.9, semestral: 69.9 },
+        perks: ['1 lingerie surpresa por mês', 'Curadoria pelo seu perfil e tamanho gravado', 'Frete da box por nossa conta', 'Troca de tamanho grátis', '10% off em tudo do closet'] },
+      { id: 'duo', name: 'Box Duo', desc: 'A lingerie do mês e mais uma peça para combinar: tanga, corset ou camisola.', highlight: true,
+        prices: { mensal: 149.9, trimestral: 134.9, semestral: 119.9 },
+        perks: ['Lingerie surpresa + 1 peça extra por mês', 'Curadoria pelo seu perfil e tamanho gravado', 'Frete da box por nossa conta', 'Troca de tamanho grátis', '15% off em tudo do closet', 'Pré-venda das coleções novas'] }
+    ],
+    // Links de pagamento recorrente (Mercado Pago → Assinaturas → Planos → link de checkout).
+    // Enquanto estiverem vazios, a assinatura é registrada e a concierge envia o pagamento pelo WhatsApp.
+    PAY_LINKS: {
+      'vip-essencial-mensal': '', 'vip-essencial-trimestral': '', 'vip-essencial-semestral': '',
+      'vip-duo-mensal': '', 'vip-duo-trimestral': '', 'vip-duo-semestral': ''
+    }
+  }
 };

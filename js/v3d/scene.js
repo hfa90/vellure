@@ -300,7 +300,7 @@ export function createWorld(canvas, opts = {}) {
   const panelVS = /* glsl */`uniform float uVel, uHover; varying vec2 vUv;
     void main(){ vUv = uv; vec3 p = position; p.z += sin(uv.y * 3.1416) * uVel * .35 + sin(uv.x * 3.1416) * uHover * .1; p.y += sin(uv.x * 3.1416) * uVel * .06;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.); }`;
-  const panelFS = /* glsl */`uniform sampler2D uTex, uTex2; uniform float uHover, uFocus, uVel, uTime, uHas2, uAlpha, uImgA, uPlaneA; varying vec2 vUv;
+  const panelFS = /* glsl */`uniform sampler2D uTex, uTex2; uniform float uHover, uFocus, uVel, uTime, uHas2, uAlpha, uImgA, uPlaneA, uMine; varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
       return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -322,12 +322,17 @@ export function createWorld(canvas, opts = {}) {
       float d = min(e.x, e.y);
       float frame = smoothstep(.006, 0., abs(d - .028));
       col = mix(col, vec3(.95, .8, .55), frame * (.25 + .75 * uFocus) * .9);
+      float shim = .5 + .5 * sin((vUv.x * uPlaneA + vUv.y) * 9. - uTime * 2.6);
+      float mf = smoothstep(.016, 0., abs(d - .028)) + smoothstep(.022, 0., d) * .9;
+      col = mix(col, vec3(1., .83, .52) * (1.05 + .5 * shim), clamp(mf, 0., 1.) * uMine);
+      col *= 1. + uMine * (1. - uFocus) * .35;
       gl_FragColor = vec4(col, uAlpha);
     }`;
   const panels = [];
   const gal = { items: [], f: 0, scrollF: 0, dragF: 0, vel: 0, hovered: -1, focus: -1 };
   const blank = new THREE.DataTexture(new Uint8Array([40, 20, 28, 255]), 1, 1); blank.needsUpdate = true;
 
+  let mineFn = () => false;
   function setGallery(items) {
     panels.forEach((p) => { helix.remove(p); p.material.dispose(); });
     panels.length = 0;
@@ -338,7 +343,7 @@ export function createWorld(canvas, opts = {}) {
         transparent: true, depthWrite: false, side: THREE.DoubleSide, vertexShader: panelVS, fragmentShader: panelFS,
         uniforms: {
           uTex: { value: t.a || blank }, uTex2: { value: t.b || blank }, uHas2: { value: t.b ? 1 : 0 },
-          uHover: { value: 0 }, uFocus: { value: 0 }, uVel: { value: 0 }, uTime: { value: 0 }, uAlpha: { value: 0 },
+          uHover: { value: 0 }, uFocus: { value: 0 }, uVel: { value: 0 }, uTime: { value: 0 }, uAlpha: { value: 0 }, uMine: { value: 0 },
           uImgA: { value: t.a?.image ? t.a.image.width / t.a.image.height : 2 / 3 }, uPlaneA: { value: PW / PH }
         }
       });
@@ -346,7 +351,7 @@ export function createWorld(canvas, opts = {}) {
       const a = i * STEP;
       m.position.set(Math.sin(a) * R, -i * DY, -Math.cos(a) * R);
       m.rotation.y = -a;
-      m.userData = { i, a, item: it };
+      m.userData = { i, a, item: it, mine: mineFn(it) ? 1 : 0 };
       m.visible = false;
       helix.add(m); panels.push(m);
     });
@@ -553,7 +558,7 @@ export function createWorld(canvas, opts = {}) {
         const foc = 1 - smooth(0, STEP * 1.3, ad);
         u.uFocus.value = damp(u.uFocus.value, foc, 6, dt);
         u.uHover.value = damp(u.uHover.value, gal.hovered === i ? 1 : 0, 5, dt);
-        u.uVel.value = gal.vel; u.uTime.value = t;
+        u.uVel.value = gal.vel; u.uTime.value = t; u.uMine.value = damp(u.uMine.value, m.userData.mine, 4, dt);
         u.uAlpha.value = gv * (1 - smooth(1.2, 1.85, ad));
         if (ad < 0.5 && (best < 0 || ad < Math.abs((best - gal.f) * STEP))) best = i;
       }
@@ -597,6 +602,7 @@ export function createWorld(canvas, opts = {}) {
     setPalette(w) { palette.w = w; },
     on(ev, fn) { handlers[ev] = fn; },
     tilt(x, y) { tiltG.x = x; tiltG.y = y; },
+    setMine(fn) { mineFn = fn; panels.forEach((m) => { m.userData.mine = fn(m.userData.item) ? 1 : 0; }); },
     get dragging() { return !!(drag && drag.moved); }
   };
 }

@@ -3,8 +3,8 @@
    pedidos com linha do tempo, favoritos, medidas, endereços e dados
    ===================================================================== */
 import { createWorld, hasWebGL } from './scene.js';
-import { $, $$, esc, money, CAT_NAME, HEART, waLink, toast, haptic, favs, local } from './common.js';
-import { mountSizer, saveMeasures } from './atelier.js';
+import { $, $$, esc, money, CAT_NAME, HEART, waLink, toast, haptic, favs, local, mySize } from './common.js';
+import { mountSizer, saveMeasures, mountSizeRecorder } from './atelier.js';
 
 const V = window.V || {};
 const root = $('#ct');
@@ -106,12 +106,13 @@ function sentView(email, title, text) {
 
 function afterLogin() {
   if (params.get('volta') === 'sacola') { location.href = 'index.html?sacola=1'; return; }
+  if (params.get('volta') === 'vip') { location.href = 'assinatura.html#assinar'; return; }
   history.replaceState(null, '', BASE + location.hash);
   dashboard();
 }
 
 /* ======================= PAINEL DA CLIENTE ======================= */
-const TABS = [['pedidos', 'Pedidos'], ['favoritos', 'Favoritos'], ['medidas', 'Medidas'], ['enderecos', 'Endereços'], ['dados', 'Meus dados']];
+const TABS = [['pedidos', 'Pedidos'], ['vip', 'Box VIP'], ['favoritos', 'Favoritos'], ['medidas', 'Medidas'], ['enderecos', 'Endereços'], ['dados', 'Meus dados']];
 let profile = null;
 
 async function dashboard() {
@@ -136,7 +137,7 @@ function show(t, push = true) {
   $$('.ct-pills button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === t)));
   if (push) history.replaceState(null, '', `${BASE}#${t}`);
   const p = $('#panel'); p.innerHTML = '<div class="ct-loading"><span></span></div>';
-  ({ pedidos, favoritos, medidas, enderecos, dados })[t](p);
+  ({ pedidos, vip, favoritos, medidas, enderecos, dados })[t](p);
 }
 
 /* ---------- pedidos ---------- */
@@ -166,6 +167,44 @@ async function pedidos(p) {
   window.gsap && gsap.fromTo('.od', { opacity: 0, y: 20 }, { opacity: 1, y: 0, stagger: 0.06, duration: 0.8, ease: 'expo.out' });
 }
 
+/* ---------- assinatura VIP ---------- */
+const SUB_ST = { ativa: 'Ativa', pausada: 'Pausada', cancelada: 'Cancelada' };
+const BOX_ST = { curadoria: 'Em curadoria', preparando: 'Preparando', enviada: 'A caminho', entregue: 'Entregue' };
+async function vip(p) {
+  let subs = [];
+  try { subs = (await V.api.mySubscriptions()).filter((s) => s.plans?.kind === 'box' || /^vip-/.test(s.plan_slug)); } catch (e) { p.innerHTML = `<p class="ct-empty">${esc(errMsg(e))}</p>`; return; }
+  const live = subs.find((s) => s.status !== 'cancelada');
+  if (!live) { p.innerHTML = `<div class="ct-empty"><strong>Você ainda não tem a Box VIP.</strong><p>Todo mês, uma lingerie escolhida para o seu estilo e o seu tamanho, com troca grátis e desconto no closet.</p><a class="btn-gold" href="assinatura.html">Conhecer a Box Misteriosa</a></div>`; return; }
+  const pr = live.preferences || {}, boxes = (live.boxes || []).sort((a, b) => b.month.localeCompare(a.month));
+  const next = live.next_billing ? fmtDate(live.next_billing + 'T12:00:00') : '—';
+  p.innerHTML = `<article class="vipc">
+      <div class="vipc-top"><div><span class="od-status ${live.status === 'pausada' ? 'x' : ''}">${SUB_ST[live.status]}</span><h3>${esc(live.plans?.name || pr.plano || 'Box VIP')}</h3><p>${esc(pr.ciclo ? pr.ciclo[0].toUpperCase() + pr.ciclo.slice(1) : '')}${pr.valor_mensal ? `, ${money(pr.valor_mensal)} por mês` : live.plans?.price ? `, ${money(live.plans.price)} por mês` : ''}</p></div>
+      <div class="vipc-next"><span>Próxima cobrança</span><b>${next}</b></div></div>
+      <div class="vipc-prof"><span>Perfil: <b>${esc(pr.estilo || '—')}</b></span><span>Cores: <b>${esc((pr.cores || []).join(', ') || '—')}</b></span><span>Tamanho: <b>${esc(pr.tamanho ? `${pr.tamanho.top}/${pr.tamanho.bottom}` : '—')}</b></span><a href="assinatura.html#perfil">Editar perfil</a></div>
+      <div class="vipc-act">
+        ${live.status === 'ativa' ? '<button class="btn-line" data-a="skip" type="button">Pular o próximo mês</button><button class="btn-line" data-a="pause" type="button">Pausar</button>' : '<button class="btn-gold" data-a="resume" type="button">Retomar assinatura</button>'}
+        <button class="btn-text" data-a="cancel" type="button">Cancelar assinatura</button>
+      </div>
+      <h4>Minhas boxes</h4>
+      <ul class="vipc-boxes">${boxes.length ? boxes.map((b) => `<li><span>${new Date(b.month + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span><b>${esc(b.theme || 'Box do mês')}</b><em>${BOX_ST[b.status] || b.status}</em>${b.tracking ? `<a target="_blank" rel="noopener" href="https://rastreamento.correios.com.br/app/index.php?objetos=${encodeURIComponent(b.tracking)}">Rastrear</a>` : ''}</li>`).join('') : '<li><span>A primeira box está em curadoria.</span></li>'}</ul>
+    </article>`;
+  p.querySelector('.vipc-act').addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+    if (a === 'cancel' && !confirmInline(e.target)) return;
+    const patch = a === 'pause' ? { status: 'pausada' } : a === 'resume' ? { status: 'ativa' } : a === 'cancel' ? { status: 'cancelada' } : null;
+    try {
+      if (a === 'skip') { const d = new Date((live.next_billing || new Date().toISOString().slice(0, 10)) + 'T12:00:00'); d.setMonth(d.getMonth() + 1); await V.api.updateSubscription(live.id, { next_billing: d.toISOString().slice(0, 10) }); toast('Pronto. Pulamos a próxima box.'); }
+      else { await V.api.updateSubscription(live.id, patch); toast(a === 'pause' ? 'Assinatura pausada.' : a === 'resume' ? 'Que bom ter você de volta.' : 'Assinatura cancelada.'); }
+      haptic(); vip(p);
+    } catch (err) { toast(errMsg(err)); }
+  });
+}
+function confirmInline(btn) {
+  if (btn.dataset.sure) return true;
+  btn.dataset.sure = '1'; btn.textContent = 'Toque de novo para confirmar o cancelamento'; setTimeout(() => { delete btn.dataset.sure; btn.textContent = 'Cancelar assinatura'; }, 4000);
+  return false;
+}
+
 /* ---------- favoritos ---------- */
 function favoritos(p) {
   const render = () => {
@@ -182,7 +221,8 @@ function favoritos(p) {
 
 /* ---------- medidas ---------- */
 function medidas(p) {
-  p.innerHTML = '<p class="ct-p">Suas medidas ficam salvas na conta. Na página de cada peça mostramos o tamanho certo para você.</p><div id="ctSizer"></div>';
+  p.innerHTML = '<div class="ct-block"><h3 class="ct-h3">Meu tamanho gravado</h3><div id="ctRec"></div></div><div class="ct-block"><h3 class="ct-h3">Minhas medidas</h3><p class="ct-p">Suas medidas ficam salvas na conta. Ao guardar, o tamanho também é gravado.</p><div id="ctSizer"></div></div>';
+  mySize.pull().then(() => mountSizeRecorder($('#ctRec'), { onDone: (v) => toast(v ? 'Tamanho gravado. As peças com o seu número aparecem em destaque na loja.' : 'Tamanho apagado.') }));
   const m = profile?.measurements;
   if (m && m.busto) saveMeasures(m);
   mountSizer($('#ctSizer'), { onSave: async (val) => { try { await V.api.updateProfile({ measurements: val }); toast('Medidas salvas na sua conta.'); } catch (e) { toast(errMsg(e)); } } });
@@ -239,5 +279,5 @@ $('#outBtn').addEventListener('click', async () => { try { await V.api.signOut()
   const user = await V.api.session();
   if (recovery && user) return authView('nova');
   if (user) { if (params.has('confirmado')) toast('E-mail confirmado. Bem-vinda à Maison!'); return afterLogin(); }
-  authView(params.get('modo') === 'criar' ? 'criar' : 'entrar', params.get('volta') === 'sacola' ? 'Entre para concluir seu pedido e acompanhar cada etapa.' : '');
+  authView(params.get('modo') === 'criar' ? 'criar' : 'entrar', params.get('volta') === 'sacola' ? 'Entre para concluir seu pedido e acompanhar cada etapa.' : params.get('volta') === 'vip' ? 'Entre ou crie sua conta para assinar a Box Misteriosa VIP.' : '');
 })();

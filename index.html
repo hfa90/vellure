@@ -66,6 +66,7 @@
       <li><a href="#vestiaire" data-filter="praia" data-img="assets/modelos/maio-estampado-com-detalhe-liso-folhagem-rosa-pink-rosa-pink-1.jpg">Moda praia</a></li>
       <li><a href="#vestiaire" data-filter="fitness" data-img="assets/modelos/calca-ivy-tecido-cirre-vinho-1.jpg">Fitness</a></li>
       <li><a href="#galerie" data-img="assets/modelos/conjunto-maya-501-preto-1.jpg">A galeria em 3D</a></li>
+      <li><a href="assinatura.html" data-img="assets/modelos/conjunto-ana-clara-503-vermelho-1.jpg" data-out>Box VIP</a></li>
     </ul>
     <div class="menu-foot">
       <a href="#" data-wa="Olá, Vellure! Quero falar com a concierge.">Falar com a concierge</a>
@@ -92,6 +93,7 @@
       <div class="gl-sticky">
       <div class="gl-top">
         <h2 class="gl-title">A galeria</h2>
+        <button type="button" class="size-pill gl-pill" data-size-open><span class="sp-dot"></span><span class="sp-txt">Gravar meu tamanho</span></button>
         <p class="gl-hint">Role ou arraste para girar a escadaria. Toque numa peça para vê-la de perto.</p>
         <div class="chips" role="group" aria-label="Filtrar galeria" data-target="galerie">
           <button type="button" class="chip on" data-f="all">Tudo</button>
@@ -99,10 +101,12 @@
           <button type="button" class="chip" data-f="corset">Corsets</button>
           <button type="button" class="chip" data-f="praia">Praia</button>
           <button type="button" class="chip" data-f="fitness">Fitness</button>
+          <button type="button" class="chip chip-mine" data-f="mine" hidden>No meu tamanho</button>
         </div>
       </div>
       <div class="gl-caption" aria-live="polite">
         <span class="gl-count" id="glCount">1 de 50</span>
+        <span class="mine-badge" id="glMine" hidden></span>
         <h3 class="gl-name" id="glName"></h3>
         <p class="gl-meta" id="glMeta"></p>
         <button type="button" class="btn-line" id="glOpen">Ver a peça</button>
@@ -118,16 +122,33 @@
 
     <section id="vestiaire" class="vestiaire" aria-label="Todas as peças">
       <header class="vs-head">
-        <h2 class="vs-title">O closet inteiro</h2>
+        <div class="vs-tt"><h2 class="vs-title">O closet inteiro</h2><button type="button" class="size-pill" data-size-open><span class="sp-dot"></span><span class="sp-txt">Gravar meu tamanho</span></button></div>
         <div class="chips" role="group" aria-label="Filtrar peças" data-target="vestiaire">
           <button type="button" class="chip on" data-f="all">Tudo</button>
           <button type="button" class="chip" data-f="lingerie">Lingerie</button>
           <button type="button" class="chip" data-f="corset">Corsets</button>
           <button type="button" class="chip" data-f="praia">Praia</button>
           <button type="button" class="chip" data-f="fitness">Fitness</button>
+          <button type="button" class="chip chip-mine" data-f="mine" hidden>No meu tamanho</button>
         </div>
       </header>
       <div class="vs-grid" id="grid"></div>
+    </section>
+
+    <section id="vip" class="vip-teaser" aria-label="Box Misteriosa VIP">
+      <a class="vt-stage" href="assinatura.html" aria-label="Conhecer a Box Misteriosa VIP">
+        <div class="vt-cube">
+          <i class="f fr"></i><i class="f bk"></i><i class="f lf"></i><i class="f rt"></i><i class="f bt"></i>
+          <div class="vt-lid"><i class="f tp"></i><i class="f fr"></i><i class="f bk"></i><i class="f lf"></i><i class="f rt"></i></div>
+          <span class="vt-light"></span>
+        </div>
+      </a>
+      <div class="vt-copy">
+        <h2>Box Misteriosa VIP</h2>
+        <p>Todo mês, uma lingerie escolhida para o seu estilo e o seu tamanho gravado. Você só descobre qual quando abrir.</p>
+        <p class="vt-price">A partir de <b id="vtFrom">R$ 69,90</b> por mês, com troca grátis.</p>
+        <a class="btn-gold" href="assinatura.html">Montar minha box</a>
+      </div>
     </section>
 
     <section id="atelier" class="atelier" aria-label="Ateliê de medidas e frete">
@@ -192,6 +213,10 @@
 
   <div id="szModal" class="sheet" role="dialog" aria-modal="true" aria-label="Descobrir meu tamanho" aria-hidden="true">
     <div class="sheet-box"><button class="sheet-close" type="button">Fechar</button><h2>Seu tamanho em segundos</h2><div id="szModalBody"></div></div>
+  </div>
+
+  <div id="sizeSheet" class="sheet" role="dialog" aria-modal="true" aria-label="Gravar meu tamanho" aria-hidden="true">
+    <div class="sheet-box"><button class="sheet-close" type="button">Fechar</button><h2>Gravar meu tamanho</h2><div id="sizeSheetBody"></div></div>
   </div>
 
   <div class="toast" id="toast" role="status"></div>

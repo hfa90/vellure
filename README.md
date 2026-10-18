@@ -17,6 +17,8 @@ HTML, CSS e JavaScript puros (módulos ES), Three.js r160, GSAP e Lenis, tudo se
 | Catálogo local com as 50 peças e 180 fotos | `js/catalog.js`, `assets/modelos/` |
 | Área da cliente: pedidos com linha do tempo, favoritos, medidas, endereços, dados | `conta.html`, `js/v3d/conta.js` |
 | Simulador de tamanho (manequim que se molda) e de frete (jornada do pacote) | `js/v3d/atelier.js` |
+| Box Misteriosa VIP: caixa 3D, perfil de curadoria inteligente, planos recorrentes | `assinatura.html`, `js/v3d/vip.js`, `js/v3d/vipbox.js` |
+| Meu tamanho gravado: destaque dourado na galeria e no closet, filtro "No meu tamanho" | `js/v3d/common.js` (mySize), `js/v3d/atelier.js` |
 | App instalável no iPhone e Android (PWA) | `manifest.webmanifest`, `sw.js`, `assets/icons/` |
 | E-mails da conta com a identidade da Maison | `supabase/emails/` |
 | Painel administrativo (Supabase) | `admin.html` |
@@ -38,7 +40,10 @@ HTML, CSS e JavaScript puros (módulos ES), Three.js r160, GSAP e Lenis, tudo se
    | Invite user | `convite.html` | Um convite da Maison Vellure |
 
    Para o remetente aparecer como Vellure (e sem o limite de envios do servidor padrão), configure um SMTP próprio em *Authentication → Emails → SMTP Settings* (Resend, Brevo ou o e-mail do seu domínio).
-5. **Publicar:** GitHub Pages servindo a branch `main` na raiz. A loja fica em `https://hfa90.github.io/vellure/`.
+5. **Box Misteriosa VIP:** rode `supabase/assinatura_vip.sql` no SQL Editor (cria os 6 planos e ajusta a cobrança por frequência). Preços, benefícios e dia de envio ficam em `js/config.js` → `VIP`.
+   - **Cobrança recorrente:** no Mercado Pago, em *Seu negócio → Assinaturas → Criar plano*, crie um plano para cada combinação (Essencial e Duo × mensal, trimestral, semestral), copie o link de checkout de cada um e cole em `VIP.PAY_LINKS`. Enquanto estiver vazio, a assinatura é registrada e a concierge envia o pagamento pelo WhatsApp.
+   - Pausar, pular mês e cancelar na área da cliente atualizam a assinatura no Supabase. Se o plano estiver no Mercado Pago, faça o mesmo ajuste lá (ou peça para automatizarmos com uma Edge Function e o webhook do Mercado Pago).
+6. **Publicar:** GitHub Pages servindo a branch `main` na raiz. A loja fica em `https://hfa90.github.io/vellure/`.
 
 ## Desempenho e acessibilidade
 

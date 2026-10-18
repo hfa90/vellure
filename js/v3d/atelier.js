@@ -2,6 +2,7 @@
    VELLURE 3D · Ateliê: simulador de tamanho (manequim que se molda às
    medidas) e simulador de frete (a jornada do pacote até a sua porta)
    ===================================================================== */
+import { mySize, haptic } from './common.js';
 const C = window.VELLURE_CONFIG || {};
 const money = (n) => (+n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -154,8 +155,9 @@ export function mountSizer(root, { onApply, compact = false, onSave } = {}) {
   root.querySelector('.sz-actions').addEventListener('click', (e) => {
     const a = e.target.closest('[data-act]'); if (!a) return;
     saveMeasures({ ...target });
+    if (a.dataset.act === 'save' && res) mySize.set({ top: res.body, bottom: res.panty, bra: res.bra, from: 'medidas' });
     if (a.dataset.act === 'apply' && onApply) onApply(res, { ...target });
-    if (a.dataset.act === 'save') { onSave ? onSave({ ...target }) : null; a.textContent = 'Medidas guardadas'; setTimeout(() => (a.textContent = 'Guardar minhas medidas'), 2200); }
+    if (a.dataset.act === 'save') { onSave ? onSave({ ...target }) : null; a.textContent = 'Medidas e tamanho gravados'; setTimeout(() => (a.textContent = 'Guardar minhas medidas'), 2200); }
   });
   refresh();
   return {
@@ -262,4 +264,40 @@ export function mountFrete(root, { subtotal = () => 0, onChoose, compact = false
   root.querySelector('.fr-opts').addEventListener('click', (e) => { const b = e.target.closest('.fr-opt'); if (!b) return; sel = b.dataset.id; render(); });
   if (saved.length === 8) go();
   return { get choice() { return q && { ...q.options.find((x) => x.id === sel), addr: q.addr, cep: q.cep, uf: q.uf }; }, recalc: () => q && go() };
+}
+
+/* ---------------- gravar meu tamanho ---------------- */
+const LET = ['PP', 'P', 'M', 'G', 'GG', 'XG'];
+export function mountSizeRecorder(root, { onDone } = {}) {
+  const cur = mySize.get() || {};
+  let top = cur.top || null, bottom = cur.bottom || null, sizer = null;
+  root.classList.add('sr');
+  root.innerHTML = `
+    <p class="sr-lead">Grave seu tamanho uma vez e a Maison destaca, na galeria e no closet, cada peça que tem o seu número.</p>
+    <div class="sr-row"><span>Parte de cima, corsets e conjuntos</span><div class="sr-chips" data-p="top">${LET.map((l) => `<button type="button" aria-pressed="${l === top}">${l}</button>`).join('')}</div></div>
+    <div class="sr-row"><span>Calcinhas, tangas, leggings e bermudas</span><div class="sr-chips" data-p="bottom">${LET.map((l) => `<button type="button" aria-pressed="${l === bottom}">${l}</button>`).join('')}</div></div>
+    <div class="sr-actions">
+      <button type="button" class="btn-gold" data-a="save">Gravar meu tamanho</button>
+      <button type="button" class="btn-line" data-a="measure">Descobrir pelas medidas</button>
+      ${cur.top ? '<button type="button" class="btn-text" data-a="clear">Apagar tamanho gravado</button>' : ''}
+    </div>
+    <div class="sr-sizer" hidden></div>`;
+  root.querySelectorAll('.sr-chips').forEach((g) => g.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return; haptic(8);
+    g.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    if (g.dataset.p === 'top') top = b.textContent; else bottom = b.textContent;
+  }));
+  root.querySelector('.sr-actions').addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-a]'); if (!a) return;
+    if (a.dataset.a === 'measure') {
+      const box = root.querySelector('.sr-sizer'); box.hidden = !box.hidden;
+      if (!sizer && !box.hidden) sizer = mountSizer(box, { compact: true, onApply: (res) => { top = res.body; bottom = res.panty; mark(); save('medidas', res.bra); } });
+      return;
+    }
+    if (a.dataset.a === 'clear') { await mySize.set(null); onDone && onDone(null); return; }
+    if (!top && !bottom) { root.querySelector('.sr-chips').animate([{ transform: 'translateX(-6px)' }, { transform: 'none' }], { duration: 400, easing: 'ease-out' }); return; }
+    save('manual');
+  });
+  function mark() { root.querySelectorAll('.sr-chips').forEach((g) => g.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x.textContent === (g.dataset.p === 'top' ? top : bottom))))); }
+  async function save(from, bra) { const v = await mySize.set({ top: top || bottom, bottom: bottom || top, bra: bra || cur.bra || null, from }); haptic([15, 30, 15]); onDone && onDone(v); }
 }
