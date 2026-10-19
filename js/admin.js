@@ -10,6 +10,7 @@
   const NAV = [
     ['dash', 'Dashboard', ico('<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>')],
     ['pedidos', 'Pedidos', ico('<path d="M5 8h14l-1 13H6z"/><path d="M9 8V6a3 3 0 016 0v2"/>')],
+    ['sacolas', 'Sacolas', ico('<path d="M6 7h12l-1 14H7z"/><path d="M9 7V5a3 3 0 016 0v2"/><path d="M10 13h4" stroke-dasharray="1 2"/>')],
     ['produtos', 'Produtos', ico('<path d="M20 7l-8-4-8 4v10l8 4 8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/>')],
     ['avisos', 'Avise-me', ico('<path d="M6 16V11a6 6 0 0112 0v5l1.6 2H4.4z"/><path d="M10 20.5a2 2 0 004 0"/>')],
     ['avaliacoes', 'Avaliações', ico('<path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6L12 16.3 6.6 19.3l1.3-6L3.3 9.2l6.1-.6z"/>')],
@@ -92,7 +93,8 @@
         opt(() => sb.from('stock_alerts').select('id', { count: 'exact', head: true }).is('notified_at', null).not('ready_at', 'is', null)),
         opt(() => sb.from('reviews').select('id', { count: 'exact', head: true }).eq('approved', false))
       ]);
-      [['pedidos', o], ['agenda', a], ['avisos', av], ['avaliacoes', rv]].forEach(([k, n]) => { const el = $(`[data-cnt="${k}"]`); if (el) { el.hidden = !n; el.textContent = n; } });
+      const sc = await opt(() => sb.from('carts').select('id', { count: 'exact', head: true }).is('recovered_at', null).is('reminded_at', null).neq('items', '[]').lt('updated_at', new Date(Date.now() - 3600e3).toISOString()));
+      [['pedidos', o], ['agenda', a], ['avisos', av], ['avaliacoes', rv], ['sacolas', sc]].forEach(([k, n]) => { const el = $(`[data-cnt="${k}"]`); if (el) { el.hidden = !n; el.textContent = n; } });
     } catch {}
   }
   async function route() {
@@ -150,6 +152,57 @@
             <h3 style="margin-top:22px">Estoque por tamanho <a class="link" href="#avisos">avise-me</a></h3>${low.map((p) => `<div class="list-row"><span>${esc(p.name)}${p.size ? ` <span class="muted">· ${esc(p.size)}</span>` : ''}</span><b style="font-weight:400;color:${p.stock < 1 ? 'var(--err)' : 'inherit'}">${p.stock < 1 ? 'esgotado' : p.stock + ' un.'}</b></div>`).join('') || '<p class="muted">Tudo abastecido.</p>'}</div>
         </div>`;
       bindOrderRows(main);
+      // aniversariantes do mês e indicações
+      const m = new Date().getMonth() + 1;
+      const bdays = Object.values(profiles).filter((p) => p.birth_date && +p.birth_date.slice(5, 7) === m).sort((a, b) => a.birth_date.slice(8) - b.birth_date.slice(8));
+      let refs = [];
+      try { refs = await q(sb.from('referrals').select('*')); } catch (e) { refs = []; }
+      const box = document.createElement('div'); box.className = 'two';
+      box.innerHTML = `<div class="pane"><h3>Aniversariantes de ${new Date().toLocaleDateString('pt-BR', { month: 'long' })}</h3><p class="muted" style="margin-top:0;font-size:13px">Cada uma recebe um cupom pessoal de ${(window.VELLURE_CONFIG?.VENDAS?.BIRTHDAY_PERCENT) || 15}% que entra sozinho na sacola.</p>
+        ${bdays.map((p) => `<div class="list-row"><span>${esc(p.full_name || p.email)} <span class="muted">· dia ${+p.birth_date.slice(8)}</span></span>${p.phone ? `<a class="link" target="_blank" rel="noopener" href="https://wa.me/55${esc(p.phone.replace(/\D/g, '').replace(/^55/, ''))}?text=${encodeURIComponent(`Feliz aniversário, ${(p.full_name || '').split(' ')[0]}! Aqui é a concierge da Vellure. Seu presente já está na sua conta: ${(window.VELLURE_CONFIG?.VENDAS?.BIRTHDAY_PERCENT) || 15}% em tudo até o fim do mês, aplicado sozinho na sacola. ${new URL('index.html', location.href).href}`)}">Parabenizar</a>` : '<span class="muted">sem WhatsApp</span>'}</div>`).join('') || '<p class="muted">Ninguém faz aniversário este mês (ou ainda não cadastrou a data).</p>'}</div>
+        <div class="pane"><h3>Indique uma amiga</h3><div class="kgrid" style="margin:0 0 12px;grid-template-columns:repeat(3,minmax(0,1fr))"><div class="kcard"><span>Amigas que entraram</span><b>${refs.length}</b></div><div class="kcard"><span>Compraram</span><b>${refs.filter((r) => r.order_id).length}</b></div><div class="kcard"><span>Pétalas dadas</span><b>${refs.reduce((a, r) => a + (r.petals || 0), 0)}</b></div></div>
+        ${Object.entries(refs.reduce((a, r) => { a[r.referrer] = (a[r.referrer] || 0) + 1; return a; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, n]) => `<div class="list-row"><span>${esc(who(id))}</span><span>${n} indicada(s)</span></div>`).join('')}</div>`;
+      main.appendChild(box);
+    },
+
+    // ---------------- SACOLAS ABANDONADAS ----------------
+    async sacolas(main) {
+      let carts, coupons, prods;
+      try { [carts, coupons, prods] = await Promise.all([q(sb.from('carts').select('*').order('updated_at', { ascending: false }).limit(300)), q(sb.from('coupons').select('*').eq('active', true)), q(sb.from('products').select('slug, name, price, images, art'))]); }
+      catch (e) { if (missing(e) || /carts/.test(String(e?.message))) { main.innerHTML = head('Sacolas') + needSql('Sacolas abandonadas').replace('estoque_avaliacoes.sql', 'vendas.sql'); return; } throw e; }
+      const bySlug = Object.fromEntries(prods.map((p) => [p.slug, p]));
+      const pub = coupons.filter((c) => !c.user_id && (!c.expires_at || new Date(c.expires_at) > new Date()));
+      const now = Date.now(), age = (c) => now - new Date(c.updated_at).getTime();
+      const open = carts.filter((c) => !c.recovered_at && (c.items || []).length);
+      const aband = open.filter((c) => age(c) > 3600e3), live = open.filter((c) => age(c) <= 3600e3);
+      const rec = carts.filter((c) => c.recovered_at && c.reminded_at && now - new Date(c.recovered_at) < 30 * 864e5);
+      const ago = (c) => { const m = Math.round(age(c) / 60000); return m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.round(m / 60)} h` : `há ${Math.round(m / 1440)} dia(s)`; };
+      const contact = (c) => { const p = c.user_id ? profiles[c.user_id] || {} : {}; return { name: c.name || p.full_name || '', phone: (c.phone || p.phone || '').replace(/\D/g, ''), email: c.email || p.email || '' }; };
+      main.innerHTML = head('Sacolas <em>abandonadas</em>') + `
+        <div class="kgrid">
+          <div class="kcard dark"><span>Esperando um lembrete</span><b>${aband.filter((c) => !c.reminded_at).length}</b><small>paradas há mais de 1 hora</small></div>
+          <div class="kcard"><span>Valor parado</span><b>${money(aband.reduce((a, c) => a + +c.subtotal, 0))}</b><small>${aband.length} sacola(s)</small></div>
+          <div class="kcard"><span>Comprando agora</span><b>${live.length}</b><small>mexeram na última hora</small></div>
+          <div class="kcard"><span>Recuperadas · 30 dias</span><b>${rec.length}</b><small>viraram pedido depois do lembrete</small></div>
+        </div>
+        <div class="pane"><div class="filters"><span class="muted" style="font-size:13px">Cupom no lembrete</span><select id="scp"><option value="">Sem cupom</option>${pub.map((c) => `<option value="${esc(c.code)}">${esc(c.code)} · ${c.kind === 'percent' ? c.value + '%' : money(c.value)}${+c.min_total ? ' acima de ' + money(c.min_total) : ''}</option>`).join('')}</select><a class="link" href="#cupons">criar cupom</a></div>
+        <p class="muted" style="margin-top:0;font-size:13px">O lembrete abre o WhatsApp da cliente com um link que devolve a sacola dela, em qualquer aparelho, já com o cupom. Só aparecem aqui sacolas de clientes com conta ou que digitaram o WhatsApp no checkout.</p>
+        ${aband.map((c, i) => { const k = contact(c); return `<div class="al-row ${c.reminded_at ? '' : 'ready'}" data-c="${i}">
+          <div class="thumb">${bySlug[c.items[0]?.slug] ? V.productImage(bySlug[c.items[0].slug]) : ''}</div>
+          <div class="al-main"><b>${esc(k.name || 'Cliente sem nome')}</b> <span class="muted">${esc(k.phone || k.email || 'sem contato')}</span> ${c.user_id ? '<span class="status pago">com conta</span>' : ''}<br>
+            <span class="muted">${ago(c)} · ${c.items.reduce((a, x) => a + (x.qty || 1), 0)} peça(s) · <b style="font-weight:500;color:var(--ink,inherit)">${money(c.subtotal)}</b>${c.reminded_at ? ` · lembrete enviado ${fmt(c.reminded_at)}${c.reminder_coupon ? ' com ' + esc(c.reminder_coupon) : ''}` : ''}</span>
+            <div class="al-who">${c.items.map((x) => `<span>${x.qty}× ${esc(bySlug[x.slug]?.name || x.slug)} · ${esc(x.size || '')}</span>`).join('')}</div></div>
+          <div class="al-act">${k.phone ? `<button class="btn sm" data-wa>${c.reminded_at ? 'Lembrar de novo' : 'Lembrar no WhatsApp'}</button>` : ''}${k.email ? '<button class="btn ghost sm" data-mail>E-mail</button>' : ''}<button class="btn ghost sm" data-copy>Copiar link</button></div></div>`; }).join('') || '<p class="muted">Nenhuma sacola parada. Quando alguém monta a sacola e sai sem finalizar, ela aparece aqui depois de 1 hora.</p>'}</div>`;
+      const link = (c) => { const cp = $('#scp').value; return new URL(`index.html?sacola=${c.id}${cp ? '&cupom=' + encodeURIComponent(cp) : ''}`, location.href).href; };
+      const text = (c) => { const k = contact(c), cp = pub.find((x) => x.code === $('#scp').value), first = (k.name || '').split(' ')[0], it = bySlug[c.items[0]?.slug]?.name || 'suas peças';
+        return `Oi${first ? ', ' + first : ''}! Aqui é a concierge da Vellure. Vi que ${c.items.length > 1 ? `a ${it} e mais ${c.items.length - 1} peça(s) ficaram` : `a ${it} ficou`} na sua sacola e guardei tudo para você.${cp ? ` Com o cupom ${cp.code} você ganha ${cp.kind === 'percent' ? cp.value + '%' : money(cp.value)} de desconto, já aplicado no link.` : ''} É só tocar para continuar: ${link(c)}`; };
+      const mark = async (c) => { try { await q(sb.from('carts').update({ reminded_at: new Date().toISOString(), reminder_coupon: $('#scp').value || null }).eq('id', c.id)); badges(); } catch (e) { fail(e); } };
+      $$('.al-row', main).forEach((row) => {
+        const c = aband[+row.dataset.c], k = contact(c);
+        $('[data-wa]', row)?.addEventListener('click', async () => { window.open(`https://wa.me/55${k.phone.replace(/^55/, '')}?text=${encodeURIComponent(text(c))}`, '_blank', 'noopener'); await mark(c); setTimeout(route, 400); });
+        $('[data-mail]', row)?.addEventListener('click', async () => { location.href = `mailto:${encodeURIComponent(k.email)}?subject=${encodeURIComponent('Sua sacola na Vellure ficou guardada')}&body=${encodeURIComponent(text(c))}`; await mark(c); });
+        $('[data-copy]', row).addEventListener('click', async () => { try { await navigator.clipboard.writeText(link(c)); V.toast('Link copiado'); } catch (e) { V.toast(link(c)); } });
+      });
     },
 
     // ---------------- PEDIDOS ----------------
@@ -290,8 +343,9 @@
 
     // ---------------- CUPONS ----------------
     async cupons(main) {
-      const list = await q(sb.from('coupons').select('*').order('code'));
-      main.innerHTML = head('Cupons') + `<div class="two"><div class="pane"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Código</th><th>Desconto</th><th>Mínimo</th><th>Validade</th><th>Usos</th><th>Ativo</th><th></th></tr></thead><tbody>
+      const all = await q(sb.from('coupons').select('*').order('code'));
+      const list = all.filter((c) => !c.user_id), pess = all.filter((c) => c.user_id);
+      main.innerHTML = head('Cupons') + `<div class="two"><div class="pane">${pess.length ? `<p class="muted" style="margin-top:0">${pess.length} cupom(ns) pessoal(is) de aniversário gerado(s) automaticamente, ${pess.filter((c) => c.uses).length} usado(s). Eles não aparecem na lista.</p>` : ''}<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Código</th><th>Desconto</th><th>Mínimo</th><th>Validade</th><th>Usos</th><th>Ativo</th><th></th></tr></thead><tbody>
         ${list.map((c) => `<tr><td><b style="font-weight:400;letter-spacing:.1em">${esc(c.code)}</b></td><td>${c.kind === 'percent' ? c.value + '%' : money(c.value)}</td><td>${money(c.min_total)}</td><td>${fmt(c.expires_at)}</td><td>${c.uses}</td><td><span class="toggle ${c.active ? 'on' : ''}" data-ct="${esc(c.code)}"></span></td><td><button class="link" data-cd="${esc(c.code)}">excluir</button></td></tr>`).join('')}</tbody></table></div></div>
         <form class="pane" id="cf"><h3>Novo cupom</h3>${field('code', 'Código', '', 'text', 'required style="text-transform:uppercase"')}<div class="row2"><div class="field"><select name="kind"><option value="percent">Percentual (%)</option><option value="fixed">Valor fixo (R$)</option></select><label>Tipo</label></div>${field('value', 'Valor', '', 'number', 'required step="0.01"')}</div>
         <div class="row2">${field('min_total', 'Compra mínima', '0', 'number', 'step="0.01"')}${field('expires_at', 'Validade', '', 'date')}</div><button class="btn block">Criar cupom</button></form></div>`;
@@ -450,13 +504,13 @@
     $$('[data-o]', root).forEach((tr) => tr.addEventListener('click', async () => {
       const o = (cache && cache.find((x) => x.id === tr.dataset.o)) || (await q(sb.from('orders').select('*, order_items(*)').eq('id', tr.dataset.o).single()));
       const p = profiles[o.user_id] || {}, a = o.address || {};
-      const wa = p.phone ? `https://wa.me/55${p.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${(p.full_name || '').split(' ')[0]}! Aqui é a concierge da Vellure. ${o.payment_method === 'dinheiro' ? `Confirmando o seu pedido ${o.code} (${money(o.total)}), com pagamento em dinheiro na entrega${a.troco ? ` e troco para ${money(a.troco)}` : ''}. Qual o melhor horário para receber?` : `Recebemos o seu pedido ${o.code} (${money(o.total)}). Assim que o Pix cair, separamos tudo para envio.`}`)}` : null;
+      const wa = p.phone ? `https://wa.me/55${p.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${(p.full_name || '').split(' ')[0]}! Aqui é a concierge da Vellure. ${o.payment_method === 'dinheiro' ? `Confirmando o seu pedido ${o.code} (${money(o.total)}), com pagamento em dinheiro na entrega${a.troco ? ` e troco para ${money(a.troco)}` : ''}. Qual o melhor horário para receber?` : `Recebemos o seu pedido ${o.code} (${money(o.total)}). Assim que o Pix cair, separamos tudo para envio.`} Acompanhe cada etapa aqui: ${new URL('rastreio.html?pedido=' + encodeURIComponent(o.code), location.href).href}`)}` : null;
       const box = modal(`<span class="eyebrow">${fmt(o.created_at)} · ${({ pix: 'Pix', dinheiro: 'Dinheiro na entrega', cartao: 'Cartão' })[o.payment_method] || o.payment_method || '—'}</span><h3>${esc(o.code)}</h3>
         <div class="row2" style="gap:24px;margin-top:16px"><div><span class="eyebrow">Cliente</span><p style="margin:6px 0">${esc(p.full_name || a.recipient || '')}<br>${esc(p.email || '')}<br>${esc(p.phone || '')}${p.cpf ? '<br>CPF ' + esc(p.cpf) : ''}</p>${wa ? `<a class="btn sm" target="_blank" rel="noopener" href="${wa}">Enviar link de pagamento</a>` : ''}</div>
         <div><span class="eyebrow">Entrega · ${esc(o.shipping_method || '')}</span><p style="margin:6px 0">${esc(a.street || '')}, ${esc(a.number || '')} ${esc(a.complement || '')}<br>${esc(a.district || '')} · ${esc(a.city || '')}/${esc(a.state || '')}<br>CEP ${esc(a.cep || '')}</p>${a.troco ? `<p style="margin:6px 0"><b style="font-weight:400">Troco para ${money(a.troco)}</b></p>` : ''}</div></div>
-        ${o.gift?.wrap ? `<div style="background:var(--blush);padding:14px;margin:12px 0"><b style="font-weight:400">🎁 Presente para ${esc(o.gift.to || '—')}</b><br><em>“${esc(o.gift.message || '')}”</em></div>` : ''}
+        ${o.gift?.wrap ? `<div class="gift-adm"><span class="eyebrow">Presente · escrever o cartão à mão${o.gift.fee ? ' · ' + money(o.gift.fee) : ''}${o.gift.hide_price !== false ? ' · sem preço na caixa' : ''}</span><p class="gift-card">${o.gift.to ? `Para ${esc(o.gift.to)},<br>` : ''}${esc(o.gift.message || '(sem mensagem)').replace(/\n/g, '<br>')}${o.gift.from ? `<br><span style="float:right">com carinho, ${esc(o.gift.from)}</span>` : ''}</p></div>` : ''}
         <div style="margin:16px 0">${(o.order_items || []).map((i) => `<div class="list-row"><span>${i.qty}× ${esc(i.name)} · ${esc(i.color || '')} · ${esc(i.size || '')}</span><span>${money(i.unit_price * i.qty)}</span></div>`).join('')}
-        <div class="list-row"><span>Subtotal</span><span>${money(o.subtotal)}</span></div><div class="list-row"><span>Descontos ${o.coupon ? '(' + esc(o.coupon) + ')' : ''}</span><span>− ${money(o.discount)}</span></div><div class="list-row"><span>Entrega</span><span>${money(o.shipping)}</span></div><div class="list-row" style="font-family:var(--serif);font-size:22px"><span>Total</span><span>${money(o.total)}</span></div></div>
+        <div class="list-row"><span>Subtotal</span><span>${money(o.subtotal)}</span></div>${o.gift?.fee ? `<div class="list-row"><span>Embalagem para presente</span><span>${money(o.gift.fee)}</span></div>` : ''}<div class="list-row"><span>Descontos ${o.coupon === 'AMIGA' ? '(indicação de amiga)' : o.coupon ? '(' + esc(o.coupon) + ')' : ''}</span><span>− ${money(o.discount)}</span></div><div class="list-row"><span>Entrega</span><span>${money(o.shipping)}</span></div><div class="list-row" style="font-family:var(--serif);font-size:22px"><span>Total</span><span>${money(o.total)}</span></div></div>
         <div class="row2"><div class="field">${statusSel(Object.keys(STATUS), o.status, 'id="os"')}<label>Status</label></div>${field('tracking', 'Código de rastreio', o.tracking || '')}</div>
         ${o.status === 'aguardando_pagamento' ? `<button class="btn ghost block" id="opaid" style="margin-bottom:10px">${o.payment_method === 'dinheiro' ? 'Dinheiro recebido: marcar como pago' : 'Pix recebido: marcar como pago'}</button>` : ''}
         <button class="btn block" id="osave">Salvar alterações</button>`, true);

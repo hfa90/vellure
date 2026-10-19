@@ -19,6 +19,15 @@ window.VELLURE_CONFIG = {
     CARD: false                 // cartão de crédito: desativado por enquanto
   },
 
+  /* ---------- Vendas (os mesmos valores ficam em supabase/vendas.sql → vendas_cfg) ---------- */
+  VENDAS: {
+    GIFT_FEE: 19.9,          // embalagem para presente com cartão escrito à mão
+    GIFT_MAX: 240,           // letras do cartão
+    BIRTHDAY_PERCENT: 15,    // cupom no mês do aniversário
+    FRIEND_PERCENT: 10,      // desconto da amiga indicada na primeira compra
+    REFERRER_PETALS: 500     // pétalas para quem indicou
+  },
+
   /* ---------- Box Misteriosa VIP (assinatura) ---------- */
   VIP: {
     // dia do mês em que as boxes saem do ateliê

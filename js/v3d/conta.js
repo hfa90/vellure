@@ -31,8 +31,13 @@ const STATUS = [
   ['enviado', 'A caminho', 'Seu pacote saiu do ateliê.'],
   ['entregue', 'Entregue', 'Esperamos que você ame cada detalhe.']
 ];
+const when = (o, st) => { const e = (o.status_log || []).filter((x) => x.status === st).pop(); return e ? new Date(e.at).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }) + ' · ' + new Date(e.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''; };
 const fmtDate = (d) => new Date(d).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
 const errMsg = (e) => (V.errMsg ? V.errMsg(e) : e?.message || 'Algo não saiu como esperado. Tente de novo.');
+const VCFG = (window.VELLURE_CONFIG || {}).VENDAS || {};
+const SHOP = new URL('index.html', BASE).href;
+const amiga = () => local.get('vellure_amiga', null);
+let perks = {};
 const reveal = () => window.gsap && gsap.fromTo(root.children, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 1, stagger: 0.06, ease: 'expo.out' });
 
 /* ======================= AUTENTICAÇÃO ======================= */
@@ -63,7 +68,7 @@ function authView(mode = 'entrar', note = '') {
   };
   root.innerHTML = `<section class="ct-auth">
       <div class="ct-auth-copy"><h1>Sua Maison particular.</h1><p>Acompanhe cada pedido do ateliê até a sua porta, guarde as peças que você ama e deixe suas medidas salvas para acertar o tamanho sempre.</p></div>
-      <div class="ct-card">${mode === 'esqueci' || mode === 'nova' ? '' : tabs}${note ? `<p class="ct-note">${note}</p>` : ''}${forms[mode]}</div>
+      <div class="ct-card">${mode === 'esqueci' || mode === 'nova' ? '' : tabs}${note ? `<p class="ct-note">${note}</p>` : ''}${mode === 'criar' && amiga() ? `<p class="ct-invite"><i></i>Convite de ${esc(amiga().name || 'uma amiga')}: ${VCFG.FRIEND_PERCENT || 10}% de desconto na sua primeira compra.</p>` : ''}${forms[mode]}</div>
     </section>`;
   reveal();
   root.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => authView(b.dataset.m)));
@@ -78,7 +83,7 @@ async function onAuth(e) {
     if (!V.sb) throw new Error('Não foi possível conectar agora. Verifique sua internet.');
     if (f.dataset.f === 'entrar') { await V.api.signIn(d.email, d.senha); haptic(); return afterLogin(); }
     if (f.dataset.f === 'criar') {
-      const { data, error } = await V.sb.auth.signUp({ email: d.email, password: d.senha, options: { data: { full_name: d.nome, phone: d.fone }, emailRedirectTo: `${BASE}?confirmado=1` } });
+      const { data, error } = await V.sb.auth.signUp({ email: d.email, password: d.senha, options: { data: { full_name: d.nome, phone: d.fone, ...(amiga()?.code ? { ref: amiga().code } : {}) }, emailRedirectTo: `${BASE}?confirmado=1` } });
       if (error) throw error;
       if (data.session) return afterLogin();
       return sentView(d.email, 'Confirme seu e-mail', 'Enviamos um link de confirmação. Toque nele e sua conta abre aqui, já com tudo pronto.');
@@ -113,12 +118,14 @@ function afterLogin() {
 }
 
 /* ======================= PAINEL DA CLIENTE ======================= */
-const TABS = [['pedidos', 'Pedidos'], ['vip', 'Box VIP'], ['favoritos', 'Favoritos'], ['medidas', 'Medidas'], ['enderecos', 'Endereços'], ['dados', 'Meus dados']];
+const TABS = [['pedidos', 'Pedidos'], ['vip', 'Box VIP'], ['favoritos', 'Favoritos'], ['indique', 'Indique uma amiga'], ['medidas', 'Medidas'], ['enderecos', 'Endereços'], ['dados', 'Meus dados']];
 let profile = null;
 
 async function dashboard() {
   $('#outBtn').hidden = false;
   try { profile = await V.api.profile(true); } catch (e) { profile = null; }
+  try { perks = (await V.api.myPerks()) || {}; } catch (e) { perks = {}; }
+  const bd = perks.birthday;
   const user = V.state.user;
   const name = (profile?.full_name || user.user_metadata?.full_name || '').split(' ')[0];
   const tab = (location.hash.slice(1) || 'pedidos');
@@ -127,6 +134,12 @@ async function dashboard() {
       <h1>${name ? `Olá, ${esc(name)}.` : 'Olá.'}</h1>
       <p>${profile?.petals ? `Você tem <b>${profile.petals.toLocaleString('pt-BR')} pétalas</b> no programa de pontos.` : 'Que bom ter você na Maison.'}</p>
     </section>
+    ${bd && !bd.used ? `<section class="ct-bday" aria-label="Presente de aniversário">
+      <div class="bd-cake" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div><p class="bd-eb">Feliz aniversário${name ? `, ${esc(name)}` : ''}</p><h2>${Math.round(bd.percent)}% em tudo, o mês inteiro.</h2>
+      <p>Seu cupom pessoal já entra sozinho na sacola. Vale até ${new Date(new Date(bd.until).getTime() - 864e5).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}, para uma compra.</p></div>
+      <div class="bd-code"><span>${esc(bd.code)}</span><a class="btn-gold" href="index.html#vestiaire">Escolher meu presente</a></div></section>` : ''}
+    ${perks.friend ? `<p class="ct-invite"><i></i>Presente de ${esc(perks.friend.from || 'uma amiga')}: ${Math.round(perks.friend.percent)}% na sua primeira compra, aplicado no checkout.</p>` : ''}
     <nav class="ct-pills" role="tablist">${TABS.map(([k, l]) => `<button role="tab" data-t="${k}" aria-selected="${k === tab}">${l}</button>`).join('')}</nav>
     <section class="ct-panel" id="panel"></section>`;
   root.querySelector('.ct-pills').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (b) show(b.dataset.t); });
@@ -138,7 +151,7 @@ function show(t, push = true) {
   $$('.ct-pills button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.t === t)));
   if (push) history.replaceState(null, '', `${BASE}#${t}`);
   const p = $('#panel'); p.innerHTML = '<div class="ct-loading"><span></span></div>';
-  ({ pedidos, vip, favoritos, medidas, enderecos, dados })[t](p);
+  ({ pedidos, vip, favoritos, indique, medidas, enderecos, dados })[t](p);
 }
 
 /* ---------- pedidos ---------- */
@@ -157,13 +170,19 @@ async function pedidos(p) {
         <span class="od-total">${money(o.total)}</span>
       </button>
       <div class="od-body">
-        ${cancel ? '<p class="ct-p">Este pedido foi cancelado. Se tiver dúvidas, fale com a concierge.</p>' : `<ol class="od-line" style="--done:${si}">${STATUS.map((s, k) => `<li class="${k < si ? 'done' : k === si ? 'now' : ''}"><i></i><b>${s[1]}</b><span>${k === si ? s[2] : ''}</span></li>`).join('')}</ol>`}
+        ${cancel ? '<p class="ct-p">Este pedido foi cancelado. Se tiver dúvidas, fale com a concierge.</p>' : `<ol class="od-line" style="--done:${si}">${STATUS.map((s, k) => `<li class="${k < si ? 'done' : k === si ? 'now' : ''}"><i></i><b>${s[1]}</b><span>${k === si ? s[2] : ''}${when(o, s[0]) ? `<em>${when(o, s[0])}</em>` : ''}</span></li>`).join('')}</ol>`}
         ${o.tracking ? `<p class="od-track">Código de rastreio <b>${esc(o.tracking)}</b> <a href="https://rastreamento.correios.com.br/app/index.php?objetos=${encodeURIComponent(o.tracking)}" target="_blank" rel="noopener">Rastrear</a></p>` : ''}
         <ul class="od-items">${(o.order_items || []).map((it) => { const pr = catalog.find((x) => x.name === it.name); return `<li><span>${it.qty}x ${esc(it.name)}${it.size ? `, tam. ${esc(it.size)}` : ''}${pr && o.status === 'entregue' ? ` <a class="od-rate" href="index.html#peca/${esc(pr.slug)}">Avaliar com foto</a>` : ''}</span><span>${money(it.unit_price * it.qty)}</span></li>`; }).join('')}</ul>
         <div class="od-sum"><span>Frete ${esc(o.shipping_method || '')}</span><span>${+o.shipping ? money(o.shipping) : 'Cortesia'}</span>${+o.discount ? `<span>Desconto</span><span>− ${money(o.discount)}</span>` : ''}<b>Total</b><b>${money(o.total)}</b></div>
         <a class="btn-line" target="_blank" rel="noopener" href="${esc(waLink(`Olá, Vellure! Quero falar sobre o pedido ${o.code}.`))}">Falar sobre este pedido</a>
+        <button class="btn-text od-share" type="button" data-share="${esc(o.code)}">Copiar link de rastreio</button>
       </div></article>`;
   }).join('');
+  p.addEventListener('click', async (e) => {
+    const sh = e.target.closest('[data-share]'); if (!sh) return;
+    const url = new URL(`rastreio.html?pedido=${encodeURIComponent(sh.dataset.share)}`, BASE).href;
+    try { await navigator.clipboard.writeText(url); toast('Link copiado. Quem abrir digita o CEP da entrega para ver.'); } catch (err) { toast(url); }
+  });
   p.addEventListener('click', (e) => { const h = e.target.closest('.od-head'); if (!h) return; const a = h.parentElement; a.classList.toggle('open'); h.setAttribute('aria-expanded', String(a.classList.contains('open'))); });
   window.gsap && gsap.fromTo('.od', { opacity: 0, y: 20 }, { opacity: 1, y: 0, stagger: 0.06, duration: 0.8, ease: 'expo.out' });
 }
@@ -255,17 +274,43 @@ async function enderecos(p) {
   p.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => { try { await V.api.deleteAddress(b.dataset.del); enderecos(p); } catch (err) { toast(errMsg(err)); } }));
 }
 
+/* ---------- indique uma amiga ---------- */
+function indique(p) {
+  const r = perks.referral || {}, pct = Math.round(r.friend_percent || VCFG.FRIEND_PERCENT || 10), pts = r.referrer_petals || VCFG.REFERRER_PETALS || 500;
+  if (!r.code) { p.innerHTML = '<p class="ct-p">Seu link de indicação aparece aqui assim que a loja estiver conectada ao banco de dados.</p>'; return; }
+  const link = `${SHOP}?amiga=${encodeURIComponent(r.code)}`;
+  const text = `Amiga, conheci a Vellure e lembrei de você. Com o meu convite você ganha ${pct}% na sua primeira compra: ${link}`;
+  p.innerHTML = `<div class="rf">
+    <div class="rf-hero">
+      <div class="rf-env" aria-hidden="true"><svg viewBox="0 0 160 120"><rect class="b" x="10" y="30" width="140" height="84" rx="8"/><path class="card" d="M26 8h108v70H26z"/><path class="l1" d="M40 26h60M40 38h80M40 50h46"/><path class="f" d="M10 34l70 46 70-46"/><circle class="s" cx="80" cy="80" r="10"/></svg></div>
+      <div><p class="bd-eb">Indique uma amiga</p><h2>Ela ganha ${pct}%. Você ganha ${pts} pétalas.</h2>
+      <p class="ct-p">Mande o seu link. Ela cria a conta por ele e tem ${pct}% de desconto na primeira compra. Quando o pedido dela chega, as pétalas caem na sua conta.</p></div>
+    </div>
+    <div class="rf-link"><span class="rf-code">${esc(r.code)}</span><input readonly value="${esc(link)}" aria-label="Seu link de indicação"><button class="btn-line" type="button" id="rfCopy">Copiar link</button></div>
+    <div class="rf-share"><a class="btn-gold" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text)}">Enviar pelo WhatsApp</a>${navigator.share ? '<button class="btn-line" type="button" id="rfShare">Compartilhar</button>' : ''}</div>
+    <div class="rf-stats">
+      <div><b>${r.friends || 0}</b><span>${(r.friends || 0) === 1 ? 'amiga entrou' : 'amigas entraram'}</span></div>
+      <div><b>${r.bought || 0}</b><span>já compraram</span></div>
+      <div><b>${(r.petals || 0).toLocaleString('pt-BR')}</b><span>pétalas ganhas</span></div>
+    </div>
+    <ol class="rf-steps"><li><b>Você envia</b>o link pelo WhatsApp ou onde preferir.</li><li><b>Ela cria a conta</b>pelo link e ganha ${pct}% na primeira compra.</li><li><b>A peça chega</b>na casa dela e as ${pts} pétalas entram na sua conta.</li></ol>
+  </div>`;
+  $('#rfCopy').addEventListener('click', async (e) => { try { await navigator.clipboard.writeText(link); } catch (err) { $('.rf-link input').select(); document.execCommand('copy'); } e.currentTarget.textContent = 'Link copiado'; haptic(14); });
+  $('#rfShare')?.addEventListener('click', async () => { try { await navigator.share({ title: 'Vellure', text, url: link }); } catch (e) { /* cancelou */ } });
+  window.gsap && gsap.fromTo('.rf-env .card', { y: 30 }, { y: 0, duration: 1.4, ease: 'expo.out', delay: 0.2 });
+}
+
 /* ---------- dados ---------- */
 function dados(p) {
   const pr = profile || {};
   p.innerHTML = `<form class="ct-form ad-form" id="dForm"><div class="ad-grid">
       <label class="w4"><span>Nome completo</span><input name="full_name" value="${esc(pr.full_name || '')}" autocomplete="name"></label>
       <label class="w2"><span>WhatsApp</span><input name="phone" value="${esc(pr.phone || '')}" inputmode="tel" autocomplete="tel"></label>
-      <label class="w2"><span>Data de nascimento</span><input name="birth_date" type="date" value="${esc(pr.birth_date || '')}"></label>
+      <label class="w2"><span>Data de nascimento</span><input name="birth_date" type="date" value="${esc(pr.birth_date || '')}" ${pr.birth_date ? 'disabled' : ''}><small class="ct-hint">${pr.birth_date ? 'Para corrigir, fale com a concierge.' : `No mês do seu aniversário você ganha ${VCFG.BIRTHDAY_PERCENT || 15}% de presente.`}</small></label>
       <label class="w4"><span>E-mail</span><input value="${esc(V.state.user.email)}" disabled></label>
     </div><button class="btn-gold" type="submit">Salvar dados</button></form>`;
   $('#dForm').addEventListener('submit', async (e) => {
-    e.preventDefault(); const d = Object.fromEntries(new FormData(e.currentTarget)); if (!d.birth_date) delete d.birth_date;
+    e.preventDefault(); const d = Object.fromEntries(new FormData(e.currentTarget)); if (!d.birth_date || pr.birth_date) delete d.birth_date;
     try { profile = await V.api.updateProfile(d); toast('Dados salvos.'); } catch (err) { toast(errMsg(err)); }
   });
 }

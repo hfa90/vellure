@@ -15,6 +15,50 @@ export function createShop({ catalog, lock, unlock, chime }) {
   let bag = local.get('vellure_sacola', []).filter((x) => bySlug.has(x.slug));
   let current = null, size = null, imgI = 0, view = 'list', ship = null;
 
+  /* ---------------- vendas: presente, benefícios e sacola salva ---------------- */
+  const VC = (window.VELLURE_CONFIG || {}).VENDAS || {};
+  const GIFT_FEE = +(VC.GIFT_FEE ?? 19.9), GIFT_MAX = VC.GIFT_MAX || 240;
+  let gift = { wrap: false, to: '', message: '', from: '', hide_price: true };
+  let perks = {}, pendingCoupon = null;
+  const qs = new URLSearchParams(location.search);
+  const newId = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === 'x' ? r : (r & 3) | 8).toString(16); }));
+  let cartId = local.get('vellure_sacola_id', null) || newId(); local.set('vellure_sacola_id', cartId);
+  let syncT;
+  const cartItems = () => bag.map(({ slug, size: sz, qty }) => ({ slug, size: sz, qty }));
+  function syncCart(now) {
+    clearTimeout(syncT);
+    syncT = setTimeout(async () => {
+      if (!window.V?.sb) return;
+      const contact = local.get('vellure_contato', null);
+      if (!window.V.state?.user && !contact) return;   // anônima sem contato: nada fica salvo
+      try { await window.V.api.saveCart(cartId, cartItems(), contact); } catch (e) { /* banco ainda sem a tabela */ }
+    }, now ? 0 : 1500);
+  }
+  async function loadPerks() {
+    try { perks = window.V?.state?.user ? (await window.V.api.myPerks()) || {} : {}; } catch (e) { perks = {}; }
+    if (perks.birthday && !perks.birthday.used && !pendingCoupon && !coupon) pendingCoupon = perks.birthday.code;
+    syncCart(true);
+    if (bagEl.classList.contains('open') && view === 'list') renderBag();
+  }
+  // datas especiais para sugerir o presente
+  function season() {
+    const now = new Date(), y = now.getFullYear();
+    const maes = (yy) => { const w = new Date(yy, 4, 1).getDay(); return new Date(yy, 4, 1 + ((7 - w) % 7) + 7); };
+    const ev = [['Dia das Mães', maes(y)], ['Dia dos Namorados', new Date(y, 5, 12)], ['Natal', new Date(y, 11, 25)], ['Dia das Mães', maes(y + 1)], ['Dia dos Namorados', new Date(y + 1, 5, 12)]];
+    for (const [n, d] of ev) { const days = Math.ceil((d - now) / 864e5); if (days >= 0 && days <= 40) return days === 0 ? `${n} é hoje` : `${n} em ${days} dia${days > 1 ? 's' : ''}`; }
+    return '';
+  }
+  function perkBanners() {
+    const out = [], am = local.get('vellure_amiga', null), u = window.V?.state?.user;
+    const bd = perks.birthday;
+    if (bd && !bd.used) out.push(`<div class="bag-perk bday"><i aria-hidden="true">✦</i><p><b>Feliz aniversário!</b> Seu presente de ${Math.round(bd.percent)}% entra sozinho no checkout.</p></div>`);
+    if (perks.friend) out.push(`<div class="bag-perk"><i aria-hidden="true">♡</i><p><b>Presente de ${esc(perks.friend.from || 'uma amiga')}:</b> ${Math.round(perks.friend.percent)}% na sua primeira compra.</p></div>`);
+    else if (!u && am) out.push(`<div class="bag-perk"><i aria-hidden="true">♡</i><p><b>Convite de ${esc(am.name || 'uma amiga')}:</b> ${VC.FRIEND_PERCENT || 10}% na primeira compra. <a href="conta.html?modo=criar&volta=sacola">Criar minha conta</a></p></div>`);
+    if (pendingCoupon && !(bd && pendingCoupon === bd.code)) out.push(`<div class="bag-perk"><i aria-hidden="true">✦</i><p>Cupom <b>${esc(pendingCoupon)}</b> guardado para o checkout.</p></div>`);
+    const se = season(); if (se) out.push(`<div class="bag-perk gift"><i aria-hidden="true">❦</i><p><b>${esc(se)}.</b> No checkout, dá para embalar para presente com cartão escrito à mão.</p></div>`);
+    return out.join('');
+  }
+
   /* ---------------- estoque por tamanho ---------------- */
   const LOW = 3;
   const left = (p, s) => (p && p.stock && s in p.stock ? p.stock[s] : null); // null = sem controle
@@ -242,7 +286,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
 
   /* ---------------- sacola ---------------- */
   const bagEl = $('#bag'), scrim = $('.scrim');
-  function save() { local.set('vellure_sacola', bag); $('#bagCount').textContent = bag.reduce((a, x) => a + x.qty, 0); }
+  function save() { local.set('vellure_sacola', bag); $('#bagCount').textContent = bag.reduce((a, x) => a + x.qty, 0); syncCart(); }
   function add(slug, sz) {
     const it = bag.find((x) => x.slug === slug && x.size === sz), n = left(bySlug.get(slug), sz);
     if (n !== null && (it ? it.qty : 0) + 1 > n) { toast(n ? `Temos só ${n} no ${sz}, e já estão na sua sacola.` : `O ${sz} esgotou.`); return false; }
@@ -253,12 +297,17 @@ export function createShop({ catalog, lock, unlock, chime }) {
     chime && chime(1.5);
   }
   const subtotal = () => bag.reduce((a, x) => a + bySlug.get(x.slug).price * x.qty, 0);
-  let coupon = null; // { code, discount }
+  let coupon = null; // { code, discount, kind, value }
+  // igual ao banco: cupom e presente da amiga não acumulam (vale o maior); Pix sobre o resto; presente por fora
   function totals(pay = 'pix') {
     const sub = subtotal(), fr = ship ? ship.price : 0;
-    const cd = coupon ? Math.min(coupon.discount, sub) : 0;
-    const disc = pay === 'pix' ? (sub - cd) * PIX : 0;
-    return { sub, fr, cd, disc, total: Math.max(0, sub - cd - disc + fr) };
+    const cdRaw = coupon ? (coupon.kind === 'percent' ? Math.round(sub * coupon.value) / 100 : Math.min(coupon.discount, sub)) : 0;
+    const fd = perks.friend ? Math.round(sub * perks.friend.percent) / 100 : 0;
+    const friend = fd > cdRaw, cd = friend ? 0 : cdRaw;
+    const base = friend ? fd : cd;
+    const disc = pay === 'pix' ? (sub - base) * PIX : 0;
+    const gf = gift.wrap ? GIFT_FEE : 0;
+    return { sub, fr, cd, fd: friend ? fd : 0, disc, gf, total: Math.max(0, sub - base - disc + fr + gf) };
   }
   const itemsHTML = () => bag.map((x, i) => {
     const p = bySlug.get(x.slug);
@@ -269,6 +318,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
   let freteBox = null;
   function renderBag() {
     const items = $('#bagItems'), foot = $('#bagFoot');
+    $('#bagFoot').classList.toggle('co', view === 'checkout');
     $('#bag h2').textContent = view === 'checkout' ? 'Finalizar pedido' : view === 'done' ? 'Pedido feito' : 'Sua sacola';
     if (view === 'done') return;
     if (!bag.length) {
@@ -278,7 +328,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
       freteBox = null; return;
     }
     if (view === 'checkout') return renderCheckout();
-    items.innerHTML = itemsHTML() + '<div class="bag-frete"><h4>Frete</h4><div id="bagFrete"></div></div>';
+    items.innerHTML = perkBanners() + itemsHTML() + '<div class="bag-frete"><h4>Frete</h4><div id="bagFrete"></div></div>';
     freteBox = mountFrete($('#bagFrete'), { compact: true, subtotal, onChoose: (o) => { ship = o; paintTotals(); } });
     paintTotals();
   }
@@ -287,6 +337,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
     const t = totals();
     $('#bagFoot').innerHTML = `<div class="row"><span>Subtotal</span><span>${money(t.sub)}</span></div>
       <div class="row"><span>Frete</span><span>${ship ? (ship.price ? money(ship.price) : 'Cortesia') : 'Informe o CEP'}</span></div>
+      ${t.fd ? `<div class="row pix"><span>Presente da amiga</span><span>− ${money(t.fd)}</span></div>` : ''}
       <div class="row pix"><span>Total no Pix, com 5% off</span><span>${money(t.total)}</span></div>
       <button class="btn-gold" type="button" id="toCheckout">Finalizar pedido</button>`;
   }
@@ -299,6 +350,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
     const val = { nome: prof.full_name || user?.user_metadata?.full_name || '', fone: prof.phone || '', cep: (ship?.cep || saved.cep || ''), rua: a.logradouro || saved.street || '', numero: saved.number || '', comp: saved.complement || '', bairro: a.bairro || saved.district || '', cidade: a.localidade || saved.city || '', uf: a.uf || saved.state || '' };
     $('#bagItems').innerHTML = `
       ${user ? '' : `<div class="co-login"><p>Entre na sua conta para acompanhar este pedido, com status e rastreio.</p><a class="btn-line" href="conta.html?volta=sacola">Entrar ou criar conta</a></div>`}
+      ${perkBanners().replace(/<div class="bag-perk gift">[\s\S]*?<\/div>/, '')}
       <form class="co-form" id="coForm" novalidate>
         ${FIELDS.map(([k, l, ac]) => `<label class="co-f co-${k}"><span>${l}</span><input name="${k}" value="${esc(val[k])}" ${ac ? `autocomplete="${ac}"` : ''} ${k === 'comp' ? '' : 'required'} ${k === 'cep' || k === 'numero' || k === 'fone' ? 'inputmode="numeric"' : ''}></label>`).join('')}
         <fieldset class="co-pay"><legend>Pagamento no ato da compra</legend>
@@ -307,26 +359,67 @@ export function createShop({ catalog, lock, unlock, chime }) {
           <label class="co-off" aria-disabled="true"><input type="radio" name="pay" value="cartao" disabled><span><b>Cartão de crédito</b>Em breve.</span><em class="co-tag">em breve</em></label>
         </fieldset>
         <label class="co-f co-troco" hidden><span>Troco para quanto? (opcional)</span><input name="troco" inputmode="decimal" placeholder="Ex.: 200"></label>
+        <div class="co-gift${gift.wrap ? ' on' : ''}" id="coGift">
+          <label class="cg-toggle"><input type="checkbox" name="gift" ${gift.wrap ? 'checked' : ''}><span class="cg-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="9" width="17" height="11.5" rx="1.5"/><path d="M2.5 9h19v-3h-19zM12 6v14.5M12 6c-1.5-3.5-6-3.5-5.5-.8.3 1.6 3.6.8 5.5.8zm0 0c1.5-3.5 6-3.5 5.5-.8-.3 1.6-3.6.8-5.5.8z"/></svg></span>
+            <span><b>Embalar para presente</b>Caixa forrada de seda, laço e um cartão escrito à mão pela Maison. + ${money(GIFT_FEE)}</span>${season() ? `<em class="co-tag">${esc(season())}</em>` : ''}</label>
+          <div class="cg-body"><div class="cg-inner">
+            <div class="cg-card" aria-hidden="true"><div class="cg-paper"><span class="cg-mono">V</span><p class="cg-to"></p><p class="cg-msg"></p><p class="cg-from"></p></div></div>
+            <div class="cg-fields">
+              <label class="co-f"><span>Para</span><input name="g_to" maxlength="60" value="${esc(gift.to)}" placeholder="Nome de quem recebe"></label>
+              <label class="co-f"><span>Mensagem do cartão</span><textarea name="g_msg" maxlength="${GIFT_MAX}" rows="3" placeholder="A gente escreve à mão, palavra por palavra.">${esc(gift.message)}</textarea><small class="cg-count"></small></label>
+              <label class="co-f"><span>De</span><input name="g_from" maxlength="60" value="${esc(gift.from)}" placeholder="Seu nome ou um apelido"></label>
+              <label class="cg-check"><input type="checkbox" name="g_hide" ${gift.hide_price ? 'checked' : ''}><span>Sem preço dentro da caixa</span></label>
+            </div>
+          </div></div>
+        </div>
         <div class="co-cupom"><label class="co-f"><span>Cupom de desconto</span><input name="cupom" autocomplete="off" value="${esc(coupon?.code || '')}" style="text-transform:uppercase"></label><button type="button" class="btn-line" id="applyCoupon">Aplicar</button><p class="co-cmsg" id="couponMsg">${coupon ? `Cupom ${esc(coupon.code)} aplicado.` : ''}</p></div>
       </form>`;
     const paint = () => {
       const pay = $('#coForm').pay.value, t = totals(pay);
       $('#bagFoot').innerHTML = `<div class="row"><span>Peças</span><span>${money(t.sub)}</span></div>
         <div class="row"><span>Frete ${ship ? esc(ship.label) : ''}</span><span>${ship ? (ship.price ? money(ship.price) : 'Cortesia') : 'a combinar'}</span></div>
-        ${t.cd ? `<div class="row pix"><span>Cupom ${esc(coupon.code)}</span><span>− ${money(t.cd)}</span></div>` : ''}
+        ${t.cd ? `<div class="row pix"><span>${perks.birthday && coupon.code === perks.birthday.code ? 'Presente de aniversário' : `Cupom ${esc(coupon.code)}`}</span><span>− ${money(t.cd)}</span></div>` : ''}
+        ${t.fd ? `<div class="row pix"><span>Presente de ${esc(perks.friend?.from || 'amiga')} (${Math.round(perks.friend.percent)}%)</span><span>− ${money(t.fd)}</span></div>` : ''}
+        ${t.gf ? `<div class="row"><span>Embalagem para presente</span><span>${money(t.gf)}</span></div>` : ''}
         ${t.disc ? `<div class="row pix"><span>Desconto Pix</span><span>− ${money(t.disc)}</span></div>` : ''}
-        <div class="row total"><span>Total</span><span>${money(t.total)}</span></div>
+        <div class="row total"><span>Total <button class="ft-det" type="button" aria-expanded="${$('#bagFoot').classList.contains('det')}">detalhes</button></span><span>${money(t.total)}</span></div>
         <button class="btn-gold" type="button" id="placeOrder">${pay === 'pix' ? 'Gerar Pix e finalizar' : 'Confirmar pedido em dinheiro'}</button>
         <button class="btn-text" type="button" id="backBag">Voltar para a sacola</button>`;
     };
     paint();
-    $('#coForm').addEventListener('change', () => { $('.co-troco').hidden = $('#coForm').pay.value !== 'dinheiro'; paint(); });
+    const cf = $('#coForm');
+    // cartão do presente ao vivo
+    const paintCard = () => {
+      gift = { wrap: cf.gift.checked, to: cf.g_to.value.trim(), message: cf.g_msg.value.trim(), from: cf.g_from.value.trim(), hide_price: cf.g_hide.checked };
+      $('.cg-to').textContent = gift.to ? `Para ${gift.to},` : 'Para você,';
+      $('.cg-msg').textContent = gift.message || 'Sua mensagem aparece aqui, do jeito que vamos escrever.';
+      $('.cg-msg').classList.toggle('ph', !gift.message);
+      $('.cg-from').textContent = gift.from ? `com carinho, ${gift.from}` : '';
+      $('.cg-count').textContent = `${cf.g_msg.value.length}/${GIFT_MAX}`;
+    };
+    paintCard();
+    cf.addEventListener('input', (e) => { if (/^g_/.test(e.target.name)) paintCard(); });
+    cf.addEventListener('change', (e) => {
+      $('.co-troco').hidden = cf.pay.value !== 'dinheiro';
+      if (e.target.name === 'gift' || e.target.name === 'g_hide') {
+        paintCard(); $('#coGift').classList.toggle('on', gift.wrap); haptic(10);
+        if (gift.wrap && window.gsap) { gsap.fromTo('.cg-card', { rotateX: -70, opacity: 0, y: 20 }, { rotateX: 0, opacity: 1, y: 0, duration: 1.1, ease: 'expo.out' }); setTimeout(() => cf.g_to.focus({ preventScroll: true }), 300); }
+      }
+      // sem conta: guarda o contato só para a concierge poder lembrar da sacola
+      if ((e.target.name === 'fone' || e.target.name === 'nome') && !window.V?.state?.user) {
+        const ph = cf.fone.value.replace(/\D/g, '');
+        if (ph.length >= 10) { local.set('vellure_contato', { name: cf.nome.value.trim(), phone: ph }); syncCart(true); }
+      }
+      paint();
+    });
+    // cupom pendente (aniversário ou link do lembrete) entra sozinho
+    if (pendingCoupon && !coupon) { cf.cupom.value = pendingCoupon; pendingCoupon = null; setTimeout(() => $('#applyCoupon')?.click(), 50); }
     $('#applyCoupon').addEventListener('click', async () => {
       const code = $('#coForm').cupom.value.trim().toUpperCase(), msg = $('#couponMsg');
       if (!code) { coupon = null; msg.textContent = ''; paint(); return; }
       try {
         const r = window.V?.api ? await window.V.api.checkCoupon(code, subtotal()) : { ok: false, message: 'Cupom indisponível agora.' };
-        if (r.ok) { coupon = { code: r.code || code, discount: +r.discount }; msg.textContent = `Cupom ${coupon.code} aplicado: − ${money(coupon.discount)}.`; msg.classList.remove('err'); haptic(12); }
+        if (r.ok) { coupon = { code: r.code || code, discount: +r.discount, kind: r.kind, value: +r.value }; msg.textContent = `Cupom ${coupon.code} aplicado: − ${money(coupon.discount)}.`; msg.classList.remove('err'); haptic(12); }
         else { coupon = null; msg.textContent = r.message || 'Cupom inválido.'; msg.classList.add('err'); }
       } catch (e) { coupon = null; msg.textContent = 'Não consegui validar o cupom agora.'; msg.classList.add('err'); }
       paint();
@@ -351,7 +444,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
       try {
         const r = await window.V.api.placeOrder({
           p_items: bag.map((x) => ({ slug: x.slug, qty: x.qty, size: x.size, color: bySlug.get(x.slug).color })),
-          p_address: address, p_shipping: { label: ship ? ship.label : 'A combinar', price: ship ? ship.price : 0 }, p_payment: pay, p_coupon: coupon?.code || null, p_gift: null
+          p_address: address, p_shipping: { label: ship ? ship.label : 'A combinar', price: ship ? ship.price : 0 }, p_payment: pay, p_coupon: coupon?.code || null, p_gift: gift.wrap ? gift : null, p_cart: cartId
         });
         code = r.code; saved = true; if (r.total != null) total = +r.total;
         try { const had = await window.V.api.addresses(); if (!had.length) await window.V.api.saveAddress({ label: 'Principal', recipient: d.nome, is_default: true, cep: d.cep, street: d.rua, number: d.numero, complement: d.comp, district: d.bairro, city: d.cidade, state: d.uf }); } catch (e) { /* já existe */ }
@@ -359,7 +452,9 @@ export function createShop({ catalog, lock, unlock, chime }) {
     }
     if (!code) code = 'VL' + Date.now().toString(36).toUpperCase().slice(-6);
     const pagto = pay === 'pix' ? `Pix (${Math.round(PIX * 100)}% off)` : `Dinheiro na entrega${troco ? `, troco para ${money(troco)}` : ''}`;
-    const msg = `Olá, Vellure! Pedido ${code}:\n\n${lines.join('\n')}\n\nFrete: ${ship ? `${ship.label}, ${ship.price ? money(ship.price) : 'cortesia'}` : 'a combinar'}${coupon ? `\nCupom: ${coupon.code}` : ''}\nPagamento: ${pagto}\nTotal: ${money(total)}\n\nEntrega para ${d.nome}: ${addrTxt}`;
+    const trackUrl = saved ? new URL(`rastreio.html?pedido=${encodeURIComponent(code)}`, location.href).href : '';
+    const giftTxt = gift.wrap ? `\n\nPresente (${money(GIFT_FEE)}): embalar${gift.to ? ` para ${gift.to}` : ''}${gift.hide_price ? ', sem preço na caixa' : ''}.${gift.message ? `\nCartão: "${gift.message}"${gift.from ? `, de ${gift.from}` : ''}` : ''}` : '';
+    const msg = `Olá, Vellure! Pedido ${code}:\n\n${lines.join('\n')}\n\nFrete: ${ship ? `${ship.label}, ${ship.price ? money(ship.price) : 'cortesia'}` : 'a combinar'}${coupon ? `\nCupom: ${coupon.code}` : ''}${t.fd ? '\nPresente da amiga na primeira compra' : ''}\nPagamento: ${pagto}\nTotal: ${money(total)}${giftTxt}\n\nEntrega para ${d.nome}: ${addrTxt}${trackUrl ? `\n\nAcompanhar: ${trackUrl}` : ''}`;
     view = 'done';
     $('#bag h2').textContent = pay === 'pix' ? 'Pague com Pix' : 'Pedido confirmado';
     const done = (body, foot) => { $('#bagItems').innerHTML = body; $('#bagFoot').innerHTML = foot; };
@@ -374,7 +469,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
           <ol class="pix-steps"><li>Abra o app do seu banco e escolha Pix.</li><li>Escaneie o QR Code ou cole o código.</li><li>Confira o valor e confirme. Depois toque em “Já paguei”.</li></ol>`
           : '<p class="pix-note">A concierge envia a chave Pix com o valor exato pelo WhatsApp em instantes.</p>'}
         </div>`,
-        `<a class="btn-gold" href="${esc(waLink(msg + '\n\n' + (ready ? 'Já paguei o Pix, segue o comprovante.' : 'Pode me enviar a chave Pix?')))}" target="_blank" rel="noopener">${ready ? 'Já paguei, enviar comprovante' : 'Receber a chave Pix'}</a>${saved ? '<a class="btn-line" href="conta.html#pedidos">Acompanhar meu pedido</a>' : ''}`);
+        `<a class="btn-gold" href="${esc(waLink(msg + '\n\n' + (ready ? 'Já paguei o Pix, segue o comprovante.' : 'Pode me enviar a chave Pix?')))}" target="_blank" rel="noopener">${ready ? 'Já paguei, enviar comprovante' : 'Receber a chave Pix'}</a>${saved ? `<a class="btn-line" href="${esc(trackUrl)}">Acompanhar o pedido</a>` : ''}`);
       if (ready) {
         pixQrSvg(payload).then((svg) => { $('#pixQr').innerHTML = svg; }).catch(() => { $('#pixQr').innerHTML = '<p class="pix-note">Use o código copia e cola abaixo.</p>'; });
         $('#pixCopy').addEventListener('click', async (e) => { try { await navigator.clipboard.writeText(e.currentTarget.dataset.code); } catch (err) { const ta = document.createElement('textarea'); ta.value = e.currentTarget.dataset.code; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } e.currentTarget.textContent = 'Código copiado'; haptic(15); toast('Código Pix copiado. Cole no app do seu banco.'); });
@@ -387,9 +482,15 @@ export function createShop({ catalog, lock, unlock, chime }) {
           <svg viewBox="0 0 100 100" class="done-mark" aria-hidden="true"><circle cx="50" cy="50" r="46"/><path d="M24 26 C34 28 38 40 44 56 C47 64 49 72 50 78 M76 26 C66 28 62 40 56 56 C53 64 51 72 50 78"/></svg>
           <strong>Pedido ${esc(code)}</strong>
           <p>Pagamento em dinheiro de <b>${money(total)}</b> na entrega ou na retirada${troco ? `, com troco para ${money(troco)}` : ''}. A concierge confirma o horário com você.</p></div>`,
-        `<a class="btn-gold" href="${esc(waLink(msg))}" target="_blank" rel="noopener">Confirmar com a concierge</a>${saved ? '<a class="btn-line" href="conta.html#pedidos">Acompanhar meu pedido</a>' : ''}`);
+        `<a class="btn-gold" href="${esc(waLink(msg))}" target="_blank" rel="noopener">Confirmar com a concierge</a>${saved ? `<a class="btn-line" href="${esc(trackUrl)}">Acompanhar o pedido</a>` : ''}`);
     }
-    bag = []; coupon = null; save();
+    // a sacola vira pedido: limpa a versão salva e começa uma nova
+    const oldId = cartId;
+    if (!saved && window.V?.sb && local.get('vellure_contato', null)) { try { window.V.api.saveCart(oldId, [], local.get('vellure_contato', null)); } catch (e) { /* */ } }
+    cartId = newId(); local.set('vellure_sacola_id', cartId); local.set('vellure_contato', null);
+    if (perks.birthday && coupon?.code === perks.birthday.code) perks.birthday.used = true;
+    if (t.fd) perks.friend = null;
+    bag = []; coupon = null; gift = { wrap: false, to: '', message: '', from: '', hide_price: true }; save();
     haptic([20, 40, 20]);
   }
 
@@ -409,6 +510,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
     if (e.target.id === 'toCheckout') { view = 'checkout'; renderBag(); $('#bagItems').scrollTop = 0; }
     if (e.target.id === 'backBag') { view = 'list'; renderBag(); }
     if (e.target.id === 'placeOrder') placeOrder();
+    const det = e.target.closest('.ft-det'); if (det) { const on = $('#bagFoot').classList.toggle('det'); det.setAttribute('aria-expanded', String(on)); }
   });
   function openBag() { if (view === 'done' && !bag.length) view = 'list'; renderBag(); bagEl.classList.add('open'); bagEl.setAttribute('aria-hidden', 'false'); scrim.classList.add('on'); lock(); }
   function closeBag() { if (!bagEl.classList.contains('open')) return; bagEl.classList.remove('open'); bagEl.setAttribute('aria-hidden', 'true'); scrim.classList.remove('on'); unlock(); if (view === 'done') view = 'list'; }
@@ -425,6 +527,47 @@ export function createShop({ catalog, lock, unlock, chime }) {
   }
   $('#seenRow') && $('#seenRow').addEventListener('click', (e) => { const b = e.target.closest('[data-slug]'); if (b) open(b.dataset.slug); });
   save(); renderGrid(); paintSeen();
-  if (/[?&]sacola=1/.test(location.search)) setTimeout(() => { view = 'checkout'; openBag(); }, 800);
-  return { open, close, renderGrid, openBag, add, bySlug };
+  // espera a entrada do site terminar
+  const whenIn = (fn) => { if (document.body.classList.contains('is-in')) return setTimeout(fn, 600); const mo = new MutationObserver(() => { if (document.body.classList.contains('is-in')) { mo.disconnect(); setTimeout(fn, 900); } }); mo.observe(document.body, { attributes: true, attributeFilter: ['class'] }); };
+  const cleanUrl = (keys) => { keys.forEach((k) => qs.delete(k)); const q = qs.toString(); history.replaceState(history.state, '', location.pathname + (q ? '?' + q : '') + location.hash); };
+  if (qs.get('sacola') === '1') { cleanUrl(['sacola']); whenIn(() => { view = 'checkout'; openBag(); }); }
+  // link do lembrete da concierge: ?sacola=<id>&cupom=CODIGO
+  const rid = qs.get('sacola'), rcp = (qs.get('cupom') || '').trim().toUpperCase();
+  if (rcp && /^[A-Z0-9-]{3,24}$/.test(rcp)) pendingCoupon = rcp;
+  if (rid && /^[0-9a-f-]{36}$/i.test(rid)) {
+    cleanUrl(['sacola', 'cupom']);
+    (async () => {
+      let items = [];
+      try { if (window.V?.sb) items = (await window.V.api.getCart(rid)).filter((x) => bySlug.has(x.slug)); } catch (e) { /* */ }
+      if (items.length) { bag = items.map((x) => ({ slug: x.slug, size: x.size, qty: Math.max(1, +x.qty || 1) })); cartId = rid; local.set('vellure_sacola_id', rid); save(); }
+      whenIn(() => { openBag(); toast(items.length ? 'Sua sacola voltou do jeito que você deixou.' : pendingCoupon ? `Cupom ${pendingCoupon} guardado para o checkout.` : 'Essa sacola já virou pedido.'); });
+    })();
+  } else if (rcp) { cleanUrl(['cupom']); whenIn(() => toast(`Cupom ${rcp} guardado para o checkout.`)); }
+  // convite de amiga: ?amiga=CODIGO
+  const am = (qs.get('amiga') || '').trim().toUpperCase();
+  if (/^[A-Z0-9]{3,16}$/.test(am)) {
+    cleanUrl(['amiga']);
+    local.set('vellure_amiga', { code: am, name: '' });
+    (async () => {
+      let name = '';
+      try { if (window.V?.sb) name = (await window.V.api.referrerName(am)) || ''; } catch (e) { /* */ }
+      if (window.V?.sb && !name) { local.set('vellure_amiga', null); return; }   // código que não existe
+      local.set('vellure_amiga', { code: am, name });
+      whenIn(() => { if (!window.V?.state?.user) invite(name); });
+    })();
+  }
+  function invite(name) {
+    const el = document.createElement('aside');
+    el.className = 'invite'; el.setAttribute('aria-label', 'Convite');
+    el.innerHTML = `<button class="iv-x" type="button" aria-label="Fechar">×</button><span class="iv-seal" aria-hidden="true">V</span>
+      <p class="iv-eb">Um convite${name ? ` de ${esc(name)}` : ''}</p><h3>${VC.FRIEND_PERCENT || 10}% na sua primeira compra.</h3>
+      <p>Crie sua conta pela Vellure e o desconto entra sozinho no checkout.</p>
+      <div class="iv-act"><a class="btn-gold" href="conta.html?modo=criar">Criar minha conta</a><button class="btn-text" type="button" data-iv>Ver o closet primeiro</button></div>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('on'));
+    const bye = () => { el.classList.remove('on'); setTimeout(() => el.remove(), 600); };
+    el.querySelector('.iv-x').addEventListener('click', bye);
+    el.querySelector('[data-iv]').addEventListener('click', () => { bye(); window.__vellureGo && window.__vellureGo('#vestiaire'); });
+  }
+  return { open, close, renderGrid, openBag, add, bySlug, loadPerks };
 }

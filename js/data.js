@@ -111,7 +111,8 @@
       if (error) throw error; V.state.user = data.user; return data.user;
     },
     async signUp(email, password, full_name, phone) {
-      const { data, error } = await V.sb.auth.signUp({ email, password, options: { data: { full_name, phone } } });
+      let ref = null; try { ref = JSON.parse(localStorage.getItem('vellure_amiga') || 'null')?.code || null; } catch (e) { /* */ }
+      const { data, error } = await V.sb.auth.signUp({ email, password, options: { data: { full_name, phone, ...(ref ? { ref } : {}) } } });
       if (error) throw error; V.state.user = data.user; return data;
     },
     async resetPassword(email) {
@@ -141,6 +142,28 @@
       if (!c) return { ok: false, message: 'Cupom inválido ou expirado' };
       if (subtotal < c[2]) return { ok: false, message: 'Válido para compras acima de R$ ' + c[2] };
       return { ok: true, code: code.toUpperCase(), discount: c[0] === 'percent' ? +(subtotal * c[1] / 100).toFixed(2) : Math.min(c[1], subtotal) };
+    },
+    // ---------- rastreio, sacola salva e benefícios ----------
+    async trackOrder(code, key) {
+      const { data, error } = await V.sb.rpc('track_order', { p_code: code, p_key: key });
+      if (error) throw error; return data;
+    },
+    async saveCart(id, items, contact) {
+      const { error } = await V.sb.rpc('save_cart', { p_id: id, p_items: items, p_contact: contact || null });
+      if (error) throw error;
+    },
+    async getCart(id) {
+      const { data, error } = await V.sb.rpc('get_cart', { p_id: id });
+      if (error) throw error; return data || [];
+    },
+    async myPerks() {
+      if (!V.state.user) return {};
+      const { data, error } = await V.sb.rpc('my_perks');
+      if (error) throw error; return data || {};
+    },
+    async referrerName(code) {
+      const { data, error } = await V.sb.rpc('referrer_name', { p_code: code });
+      if (error) throw error; return data;
     },
     async placeOrder(payload) {
       const { data, error } = await V.sb.rpc('place_order', payload);

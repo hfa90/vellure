@@ -50,13 +50,16 @@ async function getCatalog() {
 let lenis = null;
 function setupScroll() {
   if (REDUCED || !window.Lenis) return;
-  lenis = new Lenis({ lerp: 0.14, smoothWheel: true, wheelMultiplier: 1, touchMultiplier: 1.2 });
+  // painéis por cima da página (peça, sacola, pedido, folhas, busca, menu) rolam sozinhos:
+  // sem isso, a rolagem suave pausada engolia a roda do mouse e o toque dentro deles
+  const OWN = '.pdp, .bag, .sheet, .search, .menu, .rv-light, .lgpd, [data-lenis-prevent]';
+  lenis = new Lenis({ lerp: 0.14, smoothWheel: true, wheelMultiplier: 1, touchMultiplier: 1.2, prevent: (node) => !!(node && node.closest && node.closest(OWN)) });
   const raf = (t) => { lenis.raf(t); requestAnimationFrame(raf); };
   requestAnimationFrame(raf);
 }
 let locks = 0;
-const lock = () => { locks++; document.body.classList.add('lockui'); lenis ? lenis.stop() : (document.body.style.overflow = 'hidden'); };
-const unlock = () => { locks = Math.max(0, locks - 1); if (!locks) { document.body.classList.remove('lockui'); lenis ? lenis.start() : (document.body.style.overflow = ''); } };
+const lock = () => { locks++; document.body.classList.add('lockui'); document.documentElement.style.overflow = 'hidden'; lenis && lenis.stop(); };
+const unlock = () => { locks = Math.max(0, locks - 1); if (!locks) { document.body.classList.remove('lockui'); document.documentElement.style.overflow = ''; lenis && lenis.start(); } };
 function go(target) {
   const el = typeof target === 'string' ? $(target) : target; if (!el) return;
   if (lenis) lenis.scrollTo(el, { duration: 1.8, easing: (t) => 1 - Math.pow(1 - t, 4) });
@@ -134,7 +137,7 @@ async function boot() {
     let name = u.user_metadata?.full_name || '';
     try { const p = await window.V.api.profile(); name = p?.full_name || name; } catch (e) { /* */ }
     $('#acctLbl').textContent = name ? `Olá, ${name.split(' ')[0]}` : 'Minha conta';
-    favs.sync(); mySize.pull();
+    favs.sync(); mySize.pull(); shop.loadPerks();
   });
 
   if (gl) {

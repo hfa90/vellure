@@ -24,6 +24,11 @@ HTML, CSS e JavaScript puros (módulos ES), Three.js r160, GSAP e Lenis, tudo se
 | Estoque por tamanho (esgotado, "últimas unidades", limite na sacola e no pedido) | `js/v3d/shop.js`, `supabase/estoque_avaliacoes.sql` |
 | Avise-me quando chegar: fila por tamanho, aviso pronto quando o tamanho volta | `js/v3d/shop.js`, painel → Avise-me |
 | Avaliações com foto, só de quem comprou, com moderação e resposta da Maison | `js/v3d/reviews.js`, painel → Avaliações |
+| Rastreio público: número do pedido + CEP, linha do tempo com data de cada etapa, sem login | `rastreio.html`, `js/v3d/rastreio.js` |
+| Sacola abandonada: a sacola fica salva e a concierge manda um lembrete com cupom e link que devolve as peças | `js/v3d/shop.js`, painel → Sacolas |
+| Kit presente: embalagem com cartão escrito à mão, prévia do cartão ao vivo, sugestão em datas especiais | `js/v3d/shop.js`, `js/config.js` → `VENDAS` |
+| Aniversário: cupom pessoal automático no mês, aplicado sozinho na sacola | `supabase/vendas.sql`, `js/v3d/conta.js` |
+| Indique uma amiga: link pessoal, desconto na primeira compra dela, pétalas para quem indicou | `js/v3d/conta.js` (aba Indique), `supabase/vendas.sql` |
 | Busca instantânea (tecla /), cupom, vistos recentemente, compartilhar peça, concierge flutuante | `js/v3d/main.js`, `js/v3d/shop.js` |
 | Privacidade (LGPD), políticas de trocas e entregas, SEO (sitemap, robots, dados estruturados) | `js/lgpd.js`, `politicas.html`, `sitemap.xml`, `robots.txt` |
 | App instalável no iPhone e Android (PWA) | `manifest.webmanifest`, `sw.js`, `assets/icons/` |
@@ -56,7 +61,13 @@ HTML, CSS e JavaScript puros (módulos ES), Three.js r160, GSAP e Lenis, tudo se
    - **Estoque:** no painel, em Produtos, cada peça tem a grade por tamanho (com + e −). O total é a soma. Pedido cancelado devolve as peças ao tamanho certo.
    - **Avise-me:** quando um tamanho esgota, a loja troca o botão por "Avise-me quando chegar". Ao repor o tamanho (no produto ou direto na aba Avise-me), a fila fica pronta: avise pelo WhatsApp de cada cliente ou copie os e-mails em cópia oculta, e marque como avisadas. Para o aviso sair sozinho por e-mail, dá para ligar uma Edge Function com o seu SMTP.
    - **Avaliações:** só clientes com pedido pago daquela peça conseguem avaliar (o banco confere). Toda avaliação entra como "para revisar" e só aparece na loja depois que você aprova. A nota média vai para o Google junto com os dados da peça.
-7. **Publicar:** GitHub Pages servindo a branch `main` na raiz. A loja fica em `https://hfa90.github.io/vellure/`.
+7. **Rastreio, sacola abandonada, presente, aniversário e indicação:** rode `supabase/vendas.sql` no SQL Editor, depois de `estoque_avaliacoes.sql`.
+   - **Valores:** taxa do presente, % do aniversário, % da amiga e pétalas de quem indica ficam em `vendas_cfg()` no SQL e em `js/config.js` → `VENDAS`. Mude nos dois lugares.
+   - **Rastreio:** `rastreio.html?pedido=VL...`. A cliente digita o CEP da entrega (ou os 4 últimos números do WhatsApp) para ver. O link vai na mensagem do pedido, na tela do Pix e no WhatsApp da concierge.
+   - **Sacolas:** só ficam salvas as de clientes com conta ou que digitaram o WhatsApp no checkout. No painel → Sacolas, escolha um cupom e toque em "Lembrar no WhatsApp": o link devolve a sacola em qualquer aparelho, já com o cupom.
+   - **Aniversário:** no mês da data de nascimento da cliente, a conta e a sacola mostram o cupom pessoal (uso único). A data só pode ser gravada uma vez pela cliente; para corrigir, edite no Supabase.
+   - **Indicação:** cada cliente tem um código (aba "Indique uma amiga"). A amiga entra por `index.html?amiga=CODIGO`, cria a conta e ganha o desconto na primeira compra (não acumula com cupom: vale o maior). As pétalas de quem indicou caem quando o pedido da amiga é marcado como entregue.
+8. **Publicar:** GitHub Pages servindo a branch `main` na raiz. A loja fica em `https://hfa90.github.io/vellure/`.
 
 ## Desempenho e acessibilidade
 
