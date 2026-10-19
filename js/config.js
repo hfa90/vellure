@@ -12,7 +12,7 @@ window.VELLURE_CONFIG = {
     // Sua chave Pix (CPF, CNPJ, e-mail, telefone com +55 ou chave aleatória). Gera o QR Code com o valor exato do pedido.
     PIX_KEY: 'haydenfernandes.dev@gmail.com',
     PIX_NAME: 'VELLURE',        // nome do recebedor (até 25 letras, sem acento)
-    PIX_CITY: 'SAO PAULO',      // cidade do recebedor (até 15 letras, sem acento)
+    PIX_CITY: 'MANAUS',      // cidade do recebedor (até 15 letras, sem acento)
     PIX_DISCOUNT: 0.05,         // 5% de desconto no Pix
     PIX_MINUTES: 30,            // prazo para pagar o Pix
     CASH: true,                 // dinheiro na entrega ou na retirada
