@@ -107,6 +107,7 @@ function sentView(email, title, text) {
 function afterLogin() {
   if (params.get('volta') === 'sacola') { location.href = 'index.html?sacola=1'; return; }
   if (params.get('volta') === 'vip') { location.href = 'assinatura.html#assinar'; return; }
+  if (/^peca\/[a-z0-9-]+$/.test(params.get('volta') || '')) { location.href = 'index.html#' + params.get('volta'); return; }
   history.replaceState(null, '', BASE + location.hash);
   dashboard();
 }
@@ -158,7 +159,7 @@ async function pedidos(p) {
       <div class="od-body">
         ${cancel ? '<p class="ct-p">Este pedido foi cancelado. Se tiver dúvidas, fale com a concierge.</p>' : `<ol class="od-line" style="--done:${si}">${STATUS.map((s, k) => `<li class="${k < si ? 'done' : k === si ? 'now' : ''}"><i></i><b>${s[1]}</b><span>${k === si ? s[2] : ''}</span></li>`).join('')}</ol>`}
         ${o.tracking ? `<p class="od-track">Código de rastreio <b>${esc(o.tracking)}</b> <a href="https://rastreamento.correios.com.br/app/index.php?objetos=${encodeURIComponent(o.tracking)}" target="_blank" rel="noopener">Rastrear</a></p>` : ''}
-        <ul class="od-items">${(o.order_items || []).map((it) => `<li><span>${it.qty}x ${esc(it.name)}${it.size ? `, tam. ${esc(it.size)}` : ''}</span><span>${money(it.unit_price * it.qty)}</span></li>`).join('')}</ul>
+        <ul class="od-items">${(o.order_items || []).map((it) => { const pr = catalog.find((x) => x.name === it.name); return `<li><span>${it.qty}x ${esc(it.name)}${it.size ? `, tam. ${esc(it.size)}` : ''}${pr && o.status === 'entregue' ? ` <a class="od-rate" href="index.html#peca/${esc(pr.slug)}">Avaliar com foto</a>` : ''}</span><span>${money(it.unit_price * it.qty)}</span></li>`; }).join('')}</ul>
         <div class="od-sum"><span>Frete ${esc(o.shipping_method || '')}</span><span>${+o.shipping ? money(o.shipping) : 'Cortesia'}</span>${+o.discount ? `<span>Desconto</span><span>− ${money(o.discount)}</span>` : ''}<b>Total</b><b>${money(o.total)}</b></div>
         <a class="btn-line" target="_blank" rel="noopener" href="${esc(waLink(`Olá, Vellure! Quero falar sobre o pedido ${o.code}.`))}">Falar sobre este pedido</a>
       </div></article>`;
@@ -279,5 +280,5 @@ $('#outBtn').addEventListener('click', async () => { try { await V.api.signOut()
   const user = await V.api.session();
   if (recovery && user) return authView('nova');
   if (user) { if (params.has('confirmado')) toast('E-mail confirmado. Bem-vinda à Maison!'); return afterLogin(); }
-  authView(params.get('modo') === 'criar' ? 'criar' : 'entrar', params.get('volta') === 'sacola' ? 'Entre para concluir seu pedido e acompanhar cada etapa.' : params.get('volta') === 'vip' ? 'Entre ou crie sua conta para assinar a Box Misteriosa VIP.' : '');
+  authView(params.get('modo') === 'criar' ? 'criar' : 'entrar', params.get('volta') === 'sacola' ? 'Entre para concluir seu pedido e acompanhar cada etapa.' : params.get('volta') === 'vip' ? 'Entre ou crie sua conta para assinar a Box Misteriosa VIP.' : /^peca\//.test(params.get('volta') || '') ? 'Entre para avaliar a peça que você comprou.' : '');
 })();

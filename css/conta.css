@@ -99,3 +99,4 @@ body.conta { overflow-x: hidden; }
   .ad-grid { grid-template-columns: 1fr 1fr; }
   .ad-grid .w3, .ad-grid .w4 { grid-column: span 2; }
 }
+.od-rate { margin-left: 8px; color: var(--champ); font-size: 12px; border-bottom: 1px solid currentColor; white-space: nowrap; }

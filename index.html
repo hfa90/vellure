@@ -201,10 +201,22 @@
       <h2 class="pdp-name" id="pdpName"></h2>
       <p class="pdp-color" id="pdpColor"></p>
       <p class="pdp-price"><span id="pdpPrice"></span><small id="pdpPix"></small></p>
-      <fieldset class="pdp-sizes"><legend>Tamanho <button type="button" class="pdp-sizer" id="pdpSizer">Descobrir meu tamanho</button></legend><div id="pdpSizes"></div><p class="pdp-mine" id="pdpMine" hidden></p></fieldset>
+      <button class="pdp-rate" id="pdpRate" type="button" hidden></button>
+      <fieldset class="pdp-sizes"><legend>Tamanho <button type="button" class="pdp-sizer" id="pdpSizer">Descobrir meu tamanho</button></legend><div id="pdpSizes"></div><p class="pdp-mine" id="pdpMine" hidden></p><p class="pdp-stock" id="pdpStock" hidden aria-live="polite"></p></fieldset>
       <div class="pdp-buy"><button class="btn-gold" id="pdpAdd" type="button">Colocar na sacola</button><button class="fav" id="pdpFav" type="button" aria-pressed="false" aria-label="Favoritar"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9.2C1.6 7.2 4 4 7.2 4c2 0 3.5 1.1 4.8 2.8C13.3 5.1 14.8 4 16.8 4 20 4 22.4 7.2 21 10.8 19 15.6 12 20 12 20z"/></svg></button></div>
+      <form class="pdp-alert" id="pdpAlert" hidden novalidate>
+        <button class="pa-x" id="paClose" type="button" aria-label="Fechar aviso">×</button>
+        <span class="pa-bell" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0112 0v5l1.6 2H4.4z"/><path d="M10 20.5a2 2 0 004 0"/></svg></span>
+        <p class="pa-t">Avise-me quando o <b id="paSize"></b> chegar</p>
+        <p class="pa-s">Um aviso só, no dia em que a peça voltar. Sem spam.</p>
+        <label class="co-f"><span>E-mail</span><input name="email" type="email" autocomplete="email" inputmode="email" placeholder="voce@email.com"></label>
+        <label class="co-f"><span>WhatsApp (opcional)</span><input name="phone" type="tel" autocomplete="tel" inputmode="numeric" placeholder="(11) 90000-0000"></label>
+        <p class="pa-msg" id="paMsg" role="alert"></p>
+        <button class="btn-gold" type="submit">Quero ser avisada</button>
+      </form>
       <div class="pdp-row"><button class="btn-line" id="pdpWa" type="button">Tirar dúvidas no WhatsApp</button><button class="btn-line" id="pdpShare" type="button">Compartilhar</button></div>
       <p class="pdp-note">Pix com 5% off ou dinheiro na entrega. Troca em até 30 dias. Envio para todo o Brasil. <a href="politicas.html#trocas">Política de trocas</a></p>
+      <section class="pdp-rev" id="pdpRev" aria-label="Avaliações"></section>
       <div class="pdp-more"><h3>Combina com</h3><div id="pdpMore"></div></div>
     </div>
   </div>

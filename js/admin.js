@@ -11,6 +11,8 @@
     ['dash', 'Dashboard', ico('<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>')],
     ['pedidos', 'Pedidos', ico('<path d="M5 8h14l-1 13H6z"/><path d="M9 8V6a3 3 0 016 0v2"/>')],
     ['produtos', 'Produtos', ico('<path d="M20 7l-8-4-8 4v10l8 4 8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/>')],
+    ['avisos', 'Avise-me', ico('<path d="M6 16V11a6 6 0 0112 0v5l1.6 2H4.4z"/><path d="M10 20.5a2 2 0 004 0"/>')],
+    ['avaliacoes', 'Avaliações', ico('<path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6L12 16.3 6.6 19.3l1.3-6L3.3 9.2l6.1-.6z"/>')],
     ['assinaturas', 'Assinaturas', ico('<path d="M21 12a9 9 0 11-3-6.7L21 8"/><path d="M21 3v5h-5"/>')],
     ['boxes', 'Box do mês', ico('<rect x="3" y="8" width="18" height="13"/><path d="M3 8l3-5h12l3 5M12 8v13"/>')],
     ['agenda', 'Concierge', ico('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>')],
@@ -85,7 +87,12 @@
         sb.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'aguardando_pagamento'),
         sb.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'solicitado')
       ]);
-      [['pedidos', o], ['agenda', a]].forEach(([k, n]) => { const el = $(`[data-cnt="${k}"]`); if (el) { el.hidden = !n; el.textContent = n; } });
+      const opt = async (fn) => { try { const r = await fn(); return r.error ? 0 : r.count; } catch (e) { return 0; } };
+      const [av, rv] = await Promise.all([
+        opt(() => sb.from('stock_alerts').select('id', { count: 'exact', head: true }).is('notified_at', null).not('ready_at', 'is', null)),
+        opt(() => sb.from('reviews').select('id', { count: 'exact', head: true }).eq('approved', false))
+      ]);
+      [['pedidos', o], ['agenda', a], ['avisos', av], ['avaliacoes', rv]].forEach(([k, n]) => { const el = $(`[data-cnt="${k}"]`); if (el) { el.hidden = !n; el.textContent = n; } });
     } catch {}
   }
   async function route() {
@@ -119,7 +126,9 @@
       const byDay = days.map((d) => paid.filter((o) => o.created_at.slice(0, 10) === d).reduce((s, o) => s + +o.total, 0));
       const max = Math.max(1, ...byDay);
       const top = Object.values(items.filter((i) => i.orders.status !== 'cancelado').reduce((m, i) => { (m[i.name] = m[i.name] || { name: i.name, qty: 0, rev: 0 }); m[i.name].qty += i.qty; m[i.name].rev += i.qty * i.unit_price; return m; }, {})).sort((a, b) => b.rev - a.rev).slice(0, 5);
-      const low = prods.filter((p) => p.stock < 10).sort((a, b) => a.stock - b.stock).slice(0, 6);
+      const low = prods.filter((p) => p.is_active).flatMap((p) => Object.entries(p.stock_by_size || {}).filter(([, n]) => +n <= 2).map(([s, n]) => ({ name: p.name, size: s, stock: +n })))
+        .concat(prods.filter((p) => p.is_active && !Object.keys(p.stock_by_size || {}).length && p.stock < 5).map((p) => ({ name: p.name, size: '', stock: p.stock })))
+        .sort((a, b) => a.stock - b.stock).slice(0, 8);
       const today = new Date().toISOString().slice(0, 10);
       main.innerHTML = head('Bonjour, <em>Maison</em>', `<a class="btn sm" href="#pedidos">Ver pedidos</a>`) + `
         <div class="kgrid">
@@ -138,7 +147,7 @@
         <div class="two">
           <div class="pane"><h3>Últimos pedidos <a class="link" href="#pedidos">todos</a></h3>${orderTable(orders.slice(0, 6))}</div>
           <div class="pane"><h3>Próximos atendimentos</h3>${appts.filter((a) => a.date >= today && a.status !== 'cancelado').slice(0, 5).map((a) => `<div class="list-row"><span>${esc(a.services?.name)}<br><span class="muted" style="font-size:12px">${who(a.user_id)} · ${fmt(a.date)} ${esc(a.time)}</span></span><span class="status ${a.status}">${a.status}</span></div>`).join('') || '<p class="muted">Agenda livre.</p>'}
-            <h3 style="margin-top:22px">Estoque baixo</h3>${low.map((p) => `<div class="list-row"><span>${esc(p.name)}</span><b style="font-weight:400;color:${p.stock < 5 ? 'var(--err)' : 'inherit'}">${p.stock} un.</b></div>`).join('') || '<p class="muted">Tudo abastecido.</p>'}</div>
+            <h3 style="margin-top:22px">Estoque por tamanho <a class="link" href="#avisos">avise-me</a></h3>${low.map((p) => `<div class="list-row"><span>${esc(p.name)}${p.size ? ` <span class="muted">· ${esc(p.size)}</span>` : ''}</span><b style="font-weight:400;color:${p.stock < 1 ? 'var(--err)' : 'inherit'}">${p.stock < 1 ? 'esgotado' : p.stock + ' un.'}</b></div>`).join('') || '<p class="muted">Tudo abastecido.</p>'}</div>
         </div>`;
       bindOrderRows(main);
     },
@@ -165,7 +174,7 @@
         `<div class="pane"><div class="filters"><input id="pq" placeholder="Buscar…"><select id="pc"><option value="">Todas as categorias</option>${cats.map((c) => `<option value="${c.slug}">${esc(c.name)}</option>`).join('')}</select></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>Produto</th><th>Categoria</th><th>Preço</th><th>Estoque</th><th>Destaque</th><th>Ativo</th></tr></thead><tbody id="pt"></tbody></table></div></div>`;
       const draw = () => {
         const t = $('#pq').value.toLowerCase(), c = $('#pc').value;
-        $('#pt').innerHTML = prods.filter((p) => (!c || p.category === c) && (!t || p.name.toLowerCase().includes(t))).map((p) => `<tr class="click" data-id="${p.id}"><td><div class="thumb">${V.productImage(p)}</div></td><td><b style="font-weight:400">${esc(p.name)}</b><br><span class="muted" style="font-size:12px">${esc(p.subtitle || '')}</span></td><td>${esc(cats.find((x) => x.slug === p.category)?.name || p.category)}</td><td>${money(p.price)}</td><td style="color:${p.stock < 5 ? 'var(--err)' : ''}">${p.stock}</td><td><span class="toggle ${p.is_featured ? 'on' : ''}" data-tg="is_featured"></span></td><td><span class="toggle ${p.is_active ? 'on' : ''}" data-tg="is_active"></span></td></tr>`).join('');
+        $('#pt').innerHTML = prods.filter((p) => (!c || p.category === c) && (!t || p.name.toLowerCase().includes(t))).map((p) => `<tr class="click" data-id="${p.id}"><td><div class="thumb">${V.productImage(p)}</div></td><td><b style="font-weight:400">${esc(p.name)}</b><br><span class="muted" style="font-size:12px">${esc(p.subtitle || '')}</span></td><td>${esc(cats.find((x) => x.slug === p.category)?.name || p.category)}</td><td>${money(p.price)}</td><td>${stockChips(p)}</td><td><span class="toggle ${p.is_featured ? 'on' : ''}" data-tg="is_featured"></span></td><td><span class="toggle ${p.is_active ? 'on' : ''}" data-tg="is_active"></span></td></tr>`).join('');
         $$('#pt tr').forEach((tr) => tr.addEventListener('click', async (e) => {
           const p = prods.find((x) => x.id === tr.dataset.id);
           const tg = e.target.closest('[data-tg]');
@@ -311,6 +320,107 @@
     },
 
     // ---------------- NEWSLETTER ----------------
+    // ---------------- AVISE-ME QUANDO CHEGAR ----------------
+    async avisos(main) {
+      let alerts, prods;
+      try { [alerts, prods] = await Promise.all([q(sb.from('stock_alerts').select('*').is('notified_at', null).order('created_at')), q(sb.from('products').select('id, slug, name, subtitle, sizes, stock, stock_by_size, images, art'))]); }
+      catch (e) { if (missing(e)) { main.innerHTML = head('Avise-me') + needSql('Lista de espera por tamanho'); return; } throw e; }
+      const bySlug = Object.fromEntries(prods.map((p) => [p.slug, p]));
+      const groups = Object.values(alerts.reduce((m, a) => { const k = a.product_slug + '|' + a.size; (m[k] = m[k] || { slug: a.product_slug, size: a.size, list: [] }).list.push(a); return m; }, {}))
+        .map((g) => ({ ...g, p: bySlug[g.slug], left: +(bySlug[g.slug]?.stock_by_size || {})[g.size] || 0 }))
+        .sort((a, b) => (b.left > 0) - (a.left > 0) || b.list.length - a.list.length);
+      const ready = groups.filter((g) => g.left > 0);
+      main.innerHTML = head('Avise-me <em>quando chegar</em>', `<button class="btn ghost sm" id="exp">Exportar CSV</button>`) + `
+        <div class="kgrid">
+          <div class="kcard dark"><span>Clientes esperando</span><b>${alerts.length}</b><small>em ${groups.length} tamanho(s)</small></div>
+          <div class="kcard"><span>Prontas para avisar</span><b>${ready.reduce((a, g) => a + g.list.length, 0)}</b><small>o tamanho já voltou</small></div>
+          <div class="kcard"><span>Mais pedido</span><b style="font-size:22px">${groups[0] ? esc((groups[0].p?.name || groups[0].slug)) + ' · ' + esc(groups[0].size) : '—'}</b><small>${groups[0] ? groups[0].list.length + ' na fila' : 'sem fila'}</small></div>
+        </div>
+        <div class="pane"><p class="muted" style="margin-top:0">Reponha o tamanho aqui mesmo. Quando ele volta, a fila fica pronta: avise pelo WhatsApp (uma a uma) ou copie os e-mails para enviar em cópia oculta, e marque como avisadas.</p>
+        ${groups.map((g, gi) => `<div class="al-row ${g.left > 0 ? 'ready' : ''}" data-g="${gi}">
+          <div class="thumb">${g.p ? V.productImage(g.p) : ''}</div>
+          <div class="al-main"><b>${esc(g.p?.name || g.slug)}</b> <span class="muted">${esc(g.p?.subtitle || '')}</span><br>
+            <span class="al-size">Tamanho ${esc(g.size)}</span> <span class="status ${g.left > 0 ? 'pago' : 'aguardando_pagamento'}">${g.left > 0 ? `voltou · ${g.left} un.` : 'esgotado'}</span> <span class="muted">· ${g.list.length} esperando desde ${fmt(g.list[0].created_at)}</span>
+            <div class="al-who">${g.list.map((a) => `<span title="${fmt(a.created_at)}">${esc(a.email || '')}${a.email && a.phone ? ' · ' : ''}${esc(a.phone || '')}${a.phone ? ` <a class="link" target="_blank" rel="noopener" href="https://wa.me/55${esc(a.phone.replace(/^55/, ''))}?text=${encodeURIComponent(`Oi! Aqui é a concierge da Vellure. A peça ${g.p?.name || ''} voltou no tamanho ${g.size}, e você pediu para ser avisada. Separei o link: ${shopUrl(g.slug)}`)}">WhatsApp</a>` : ''}</span>`).join('')}</div>
+          </div>
+          <div class="al-act">
+            <div class="al-rep"><input class="mini-in" type="number" min="1" value="${g.left > 0 ? g.left : 1}" aria-label="Quantidade"><button class="btn ghost sm" data-rep>${g.left > 0 ? 'Atualizar' : 'Repor'}</button></div>
+            ${g.list.some((a) => a.email) ? '<button class="btn ghost sm" data-mail>E-mails</button>' : ''}
+            <button class="btn sm" data-done>Marcar avisadas</button>
+          </div></div>`).join('') || '<p class="muted">Ninguém na fila. Quando um tamanho esgota, a loja oferece "Avise-me quando chegar" e as clientes aparecem aqui.</p>'}</div>`;
+      $('#exp').addEventListener('click', () => csv(alerts.map((a) => ({ peca: bySlug[a.product_slug]?.name || a.product_slug, tamanho: a.size, email: a.email, whatsapp: a.phone, pedido_em: a.created_at, voltou_em: a.ready_at })), 'avise-me-vellure'));
+      $$('.al-row', main).forEach((row) => {
+        const g = groups[+row.dataset.g];
+        $('[data-rep]', row).addEventListener('click', async () => {
+          const n = Math.max(0, Math.floor(+$('.al-rep input', row).value || 0)); if (!g.p) return;
+          try { await q(sb.from('products').update({ stock_by_size: { ...(g.p.stock_by_size || {}), [g.size]: n } }).eq('id', g.p.id)); V.toast(`${g.size} com ${n} un. A fila está pronta para avisar.`); route(); badges(); } catch (e) { fail(e); }
+        });
+        $('[data-mail]', row)?.addEventListener('click', async () => {
+          const emails = g.list.map((a) => a.email).filter(Boolean);
+          const subj = `Voltou no seu tamanho: ${g.p?.name || ''} ${g.size}`;
+          const body = `Olá!\n\nA peça ${g.p?.name || ''} voltou no tamanho ${g.size}, e você pediu para ser avisada.\n\nEla está aqui: ${shopUrl(g.slug)}\n\nCom carinho,\nMaison Vellure`;
+          try { await navigator.clipboard.writeText(emails.join(', ')); V.toast(`${emails.length} e-mail(s) copiados. Abrindo o e-mail com cópia oculta.`); } catch (e) { /* */ }
+          location.href = `mailto:?bcc=${encodeURIComponent(emails.join(','))}&subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+        });
+        $('[data-done]', row).addEventListener('click', async () => {
+          if (!g.left && !confirm('Este tamanho ainda está esgotado. Marcar a fila como avisada mesmo assim?')) return;
+          try { await q(sb.from('stock_alerts').update({ notified_at: new Date().toISOString() }).in('id', g.list.map((a) => a.id))); V.toast('Fila marcada como avisada ✦'); route(); badges(); } catch (e) { fail(e); }
+        });
+      });
+    },
+
+    // ---------------- AVALIAÇÕES ----------------
+    async avaliacoes(main) {
+      let revs, prods;
+      try { [revs, prods] = await Promise.all([q(sb.from('reviews').select('*').order('created_at', { ascending: false })), q(sb.from('products').select('slug, name, images, art'))]); }
+      catch (e) { if (missing(e)) { main.innerHTML = head('Avaliações') + needSql('Avaliações com foto'); return; } throw e; }
+      const bySlug = Object.fromEntries(prods.map((p) => [p.slug, p]));
+      const pend = revs.filter((r) => !r.approved), pub = revs.filter((r) => r.approved);
+      const avg = pub.length ? pub.reduce((a, r) => a + r.rating, 0) / pub.length : 0;
+      let tab = pend.length ? 'pend' : 'pub';
+      const st = (n) => '★★★★★'.slice(0, n) + '<span style="opacity:.25">' + '★★★★★'.slice(n) + '</span>';
+      const FITS = { pequeno: 'ficou pequeno', perfeito: 'veste perfeito', grande: 'ficou grande' };
+      main.innerHTML = head('Avaliações <em>com foto</em>', `<button class="btn ghost sm" id="exp">Exportar CSV</button>`) + `
+        <div class="kgrid">
+          <div class="kcard dark"><span>Para revisar</span><b>${pend.length}</b><small>aparecem na loja só depois de aprovadas</small></div>
+          <div class="kcard"><span>Publicadas</span><b>${pub.length}</b><small>${pub.filter((r) => r.photos?.length).length} com foto</small></div>
+          <div class="kcard"><span>Nota média</span><b>${pub.length ? avg.toFixed(1).replace('.', ',') : '—'}</b><small>todas as peças</small></div>
+        </div>
+        <div class="pane"><div class="filters"><button class="btn sm" data-tab="pend">Para revisar (${pend.length})</button><button class="btn ghost sm" data-tab="pub">Publicadas (${pub.length})</button></div><div id="rvl"></div></div>`;
+      const draw = () => {
+        $$('[data-tab]', main).forEach((b) => b.classList.toggle('ghost', b.dataset.tab !== tab));
+        const list = tab === 'pend' ? pend : pub;
+        $('#rvl').innerHTML = list.map((r) => `<article class="rv-adm" data-r="${r.id}">
+          <div class="thumb">${bySlug[r.product_slug] ? V.productImage(bySlug[r.product_slug]) : ''}</div>
+          <div class="rv-adm-main">
+            <p style="margin:0"><span class="rv-st">${st(r.rating)}</span> <b style="font-weight:400">${esc(bySlug[r.product_slug]?.name || r.product_slug)}</b></p>
+            <p class="muted" style="margin:4px 0;font-size:12px">${esc(r.author_name || '')} · ${esc(who(r.user_id))} · ${fmt(r.created_at)}${r.size_bought ? ' · comprou ' + esc(r.size_bought) : ''}${r.fit ? ' · ' + FITS[r.fit] : ''}${r.verified ? ' · compra verificada' : ''}</p>
+            ${r.body ? `<p style="margin:8px 0;white-space:pre-line">${esc(r.body)}</p>` : '<p class="muted" style="margin:8px 0">Sem texto.</p>'}
+            ${r.photos?.length ? `<div class="rv-adm-ph">${r.photos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt=""></a>`).join('')}</div>` : ''}
+            <div class="field" style="margin-top:10px"><textarea data-reply placeholder=" " rows="2">${esc(r.reply || '')}</textarea><label>Resposta da Maison (opcional, aparece embaixo da avaliação)</label></div>
+          </div>
+          <div class="al-act">
+            ${r.approved ? '<button class="btn ghost sm" data-hide>Ocultar</button>' : '<button class="btn sm" data-ok>Aprovar</button>'}
+            <button class="btn ghost sm" data-save>Salvar resposta</button>
+            <button class="btn ghost sm" data-del>Excluir</button>
+          </div></article>`).join('') || `<p class="muted">${tab === 'pend' ? 'Nada para revisar.' : 'Nenhuma avaliação publicada ainda.'} As avaliações vêm só de clientes com compra paga da peça.</p>`;
+        $$('.rv-adm', main).forEach((el) => {
+          const r = revs.find((x) => x.id === el.dataset.r), reply = () => $('[data-reply]', el).value.trim() || null;
+          const set = async (patch, msg) => { try { await q(sb.from('reviews').update(patch).eq('id', r.id)); Object.assign(r, patch); V.toast(msg); route(); badges(); } catch (e) { fail(e); } };
+          $('[data-ok]', el)?.addEventListener('click', () => set({ approved: true, reply: reply() }, 'Avaliação publicada ✦'));
+          $('[data-hide]', el)?.addEventListener('click', () => set({ approved: false }, 'Avaliação ocultada'));
+          $('[data-save]', el).addEventListener('click', () => set({ reply: reply() }, 'Resposta salva'));
+          $('[data-del]', el).addEventListener('click', async () => {
+            if (!confirm('Excluir esta avaliação de vez? Isso não pode ser desfeito.')) return;
+            try { await q(sb.from('reviews').delete().eq('id', r.id)); V.toast('Avaliação excluída'); route(); badges(); } catch (e) { fail(e); }
+          });
+        });
+      };
+      $$('[data-tab]', main).forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; draw(); }));
+      $('#exp').addEventListener('click', () => csv(revs.map((r) => ({ peca: bySlug[r.product_slug]?.name || r.product_slug, nota: r.rating, autora: r.author_name, texto: r.body, caimento: r.fit, tamanho: r.size_bought, fotos: (r.photos || []).join(' '), publicada: r.approved, data: r.created_at })), 'avaliacoes-vellure'));
+      draw();
+    },
+
     async newsletter(main) {
       const list = await q(sb.from('newsletter').select('*').order('created_at', { ascending: false }));
       main.innerHTML = head('Liste <em>Privée</em>', `<button class="btn ghost sm" id="exp">Exportar CSV</button>`) + `<div class="pane"><p class="muted" style="margin-top:0">${list.length} inscritas</p><div class="tbl-wrap"><table class="tbl"><thead><tr><th>E-mail</th><th>Data</th></tr></thead><tbody>${list.map((n) => `<tr><td>${esc(n.email)}</td><td>${fmt(n.created_at)}</td></tr>`).join('')}</tbody></table></div></div>`;
@@ -321,6 +431,15 @@
   async function upd(table, id, patch) {
     try { await q(sb.from(table).update(patch).eq('id', id)); V.toast('Atualizado ✦'); } catch (e) { fail(e); }
   }
+
+  function stockChips(p) {
+    const m = p.stock_by_size || {};
+    if (!Object.keys(m).length) return `<span style="color:${p.stock < 5 ? 'var(--err)' : ''}">${p.stock}</span>`;
+    return `<span class="schips">${(p.sizes || Object.keys(m)).filter((s) => s in m).map((s) => `<i class="${+m[s] === 0 ? 'z' : +m[s] <= 2 ? 'l' : ''}" title="${esc(s)}: ${+m[s]} un.">${esc(s)}<b>${+m[s]}</b></i>`).join('')}</span>`;
+  }
+  const shopUrl = (slug) => new URL('index.html' + (slug ? '#peca/' + slug : ''), location.href).href;
+  const missing = (e) => /stock_alerts|reviews|does not exist|schema cache/i.test(String(e?.message || e));
+  const needSql = (t) => `<div class="pane"><h3>${t}</h3><p>Para ativar, rode <b>supabase/estoque_avaliacoes.sql</b> no SQL Editor do Supabase.</p></div>`;
 
   // ---------------- tabela e detalhe de pedidos ----------------
   function orderTable(list) {
@@ -367,7 +486,8 @@
       <div class="row2" style="margin-top:16px">${field('name', 'Nome', p.name, 'text', 'required')}${field('slug', 'Slug (URL)', p.slug, 'text', 'required pattern="[a-z0-9-]+"')}</div>
       ${field('subtitle', 'Subtítulo (material · cor)', p.subtitle)}
       <div class="row3"><div class="field"><select name="category">${cats.map((c) => `<option value="${c.slug}" ${c.slug === p.category ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><label>Categoria</label></div>${field('price', 'Preço', p.price, 'number', 'step="0.01" required')}${field('compare_price', 'Preço "de"', p.compare_price || '', 'number', 'step="0.01"')}</div>
-      <div class="row3">${field('sizes', 'Tamanhos (vírgula)', (p.sizes || []).join(', '))}${field('stock', 'Estoque', p.stock, 'number')}${field('colors', 'Cores (Nome:#hex, …)', (p.colors || []).map((c) => c.name + ':' + c.hex).join(', '))}</div>
+      <div class="row3">${field('sizes', 'Tamanhos (vírgula)', (p.sizes || []).join(', '))}<div class="field"><input readonly tabindex="-1" id="stTotal" value="${p.stock ?? 0} un." placeholder=" "><label>Estoque total (soma)</label></div>${field('colors', 'Cores (Nome:#hex, …)', (p.colors || []).map((c) => c.name + ':' + c.hex).join(', '))}</div>
+      <div class="sgrid-wrap"><span class="eyebrow">Estoque por tamanho</span><div class="sgrid" id="sgrid"></div><p class="muted" style="font-size:12px;margin:6px 0 0">Ao repor um tamanho esgotado, as clientes da lista "Avise-me" ficam prontas para receber o aviso.</p></div>
       <div class="field"><textarea name="description" placeholder=" ">${esc(p.description || '')}</textarea><label>Descrição</label></div>
       <div class="row2">${field('material', 'Composição', p.material)}${field('care', 'Cuidados', p.care)}</div>
       <div style="display:flex;gap:20px;flex-wrap:wrap"><label class="check"><input type="checkbox" name="is_active" ${p.is_active ? 'checked' : ''}> Ativo na loja</label><label class="check"><input type="checkbox" name="is_featured" ${p.is_featured ? 'checked' : ''}> Destaque na home</label><label class="check"><input type="checkbox" name="is_new" ${p.is_new ? 'checked' : ''}> Novidade</label></div>
@@ -377,6 +497,19 @@
     bindArt('aStyle', 'style'); bindArt('aBg', 'bg'); bindArt('aColor', 'color'); bindArt('aAccent', 'accent'); bindArt('aSkin', 'skin', true);
     pv();
     const f = $('#pf', box);
+    // grade de estoque por tamanho
+    const sbs = { ...(p.stock_by_size || {}) };
+    if (!Object.keys(sbs).length && (p.sizes || []).length) { const n = p.sizes.length; p.sizes.forEach((s, i) => (sbs[s] = Math.floor((p.stock || 0) / n) + (i < (p.stock || 0) % n ? 1 : 0))); }
+    const sizesNow = () => f.sizes.value.split(',').map((s) => s.trim()).filter(Boolean);
+    const drawStock = () => {
+      const sz = sizesNow();
+      $('#sgrid', box).innerHTML = sz.map((s) => `<label class="sg ${(+sbs[s] || 0) === 0 ? 'zero' : ''}"><span>${esc(s)}</span><button type="button" data-st="-1" data-s="${esc(s)}">−</button><input type="number" min="0" step="1" inputmode="numeric" data-sz="${esc(s)}" value="${+sbs[s] || 0}"><button type="button" data-st="1" data-s="${esc(s)}">+</button></label>`).join('') || '<p class="muted">Informe os tamanhos acima.</p>';
+      $('#stTotal', box).value = sz.reduce((a, s) => a + (+sbs[s] || 0), 0) + ' un.';
+    };
+    $('#sgrid', box).addEventListener('input', (e) => { const i = e.target.closest('[data-sz]'); if (!i) return; sbs[i.dataset.sz] = Math.max(0, Math.floor(+i.value || 0)); i.closest('.sg').classList.toggle('zero', !sbs[i.dataset.sz]); $('#stTotal', box).value = sizesNow().reduce((a, s) => a + (+sbs[s] || 0), 0) + ' un.'; });
+    $('#sgrid', box).addEventListener('click', (e) => { const b = e.target.closest('[data-st]'); if (!b) return; sbs[b.dataset.s] = Math.max(0, (+sbs[b.dataset.s] || 0) + +b.dataset.st); drawStock(); });
+    f.sizes.addEventListener('input', drawStock);
+    drawStock();
     f.name.addEventListener('input', () => { if (isNew) f.slug.value = f.name.value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); });
     const drawImgs = () => {
       $('#imgs', box).innerHTML = images.map((u, i) => `<div class="im"><img src="${esc(u)}" alt=""><button type="button" data-ri="${i}">×</button></div>`).join('');
@@ -407,7 +540,7 @@
       const d = Object.fromEntries(new FormData(f));
       const row = {
         name: d.name, slug: d.slug, subtitle: d.subtitle, category: d.category, price: +d.price, compare_price: d.compare_price ? +d.compare_price : null,
-        sizes: d.sizes.split(',').map((s) => s.trim()).filter(Boolean), stock: +d.stock || 0,
+        sizes: sizesNow(), stock_by_size: Object.fromEntries(sizesNow().map((s) => [s, +sbs[s] || 0])), stock: sizesNow().reduce((a, s) => a + (+sbs[s] || 0), 0),
         colors: d.colors.split(',').map((s) => s.trim()).filter(Boolean).map((s) => { const [name, hex] = s.split(':'); return { name: name.trim(), hex: (hex || '#000').trim() }; }),
         description: d.description, material: d.material, care: d.care, is_active: !!d.is_active, is_featured: !!d.is_featured, is_new: !!d.is_new, art, images
       };

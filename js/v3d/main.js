@@ -18,6 +18,13 @@ const HOVER = matchMedia('(hover: hover) and (pointer: fine)').matches;
 const MOBILE = innerWidth < 760;
 
 /* ---------------- catálogo: fotos locais + produtos com foto no Supabase ---------------- */
+// estoque por tamanho vindo do banco: {P: 3, M: 0}; tamanho ausente = sem controle
+function stockOf(r) {
+  const m = r.stock_by_size && typeof r.stock_by_size === 'object' ? r.stock_by_size : {};
+  if (Object.keys(m).length) return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, Math.max(0, +v || 0)]));
+  if (r.stock != null && +r.stock <= 0) return Object.fromEntries((r.sizes || []).map((s) => [s, 0]));
+  return null;
+}
 async function getCatalog() {
   const local = (window.VELLURE_CATALOG || []).slice();
   try {
@@ -31,7 +38,8 @@ async function getCatalog() {
       map.set(r.slug, {
         slug: r.slug, name: r.name, color: r.subtitle || (r.colors?.[0]?.name ?? ''), price: +r.price,
         cat: known.includes(r.category) ? r.category : 'lingerie',
-        sizes: r.sizes?.length ? r.sizes : ['P', 'M', 'G', 'GG'], imgs: r.images.filter(Boolean)
+        sizes: r.sizes?.length ? r.sizes : ['P', 'M', 'G', 'GG'], imgs: r.images.filter(Boolean),
+        stock: stockOf(r)
       });
     });
     return [...map.values()];

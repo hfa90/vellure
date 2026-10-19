@@ -207,6 +207,51 @@
       else await V.sb.from('wishlist').delete().eq('user_id', V.state.user.id).eq('product_id', pr.id);
     },
 
+    // ---------- avise-me quando chegar ----------
+    async stockAlert(slug, size, email, phone) {
+      const { data, error } = await V.sb.rpc('stock_alert', { p_slug: slug, p_size: size, p_email: email || null, p_phone: phone || null });
+      if (error) throw error; return data;
+    },
+
+    // ---------- avaliações ----------
+    async ratings() {
+      return q('ratings', () => V.sb.from('product_ratings').select('*'), []);
+    },
+    async reviews(slug) {
+      const { data, error } = await V.sb.from('reviews').select('*').eq('product_slug', slug).order('created_at', { ascending: false }).limit(60);
+      if (error) throw error; return data || [];
+    },
+    // pode avaliar? só quem comprou (pedido pago em diante)
+    async boughtSize(slug) {
+      if (!V.state.user) return null;
+      const { data, error } = await V.sb.from('orders').select('status, order_items(size, products(slug))')
+        .eq('user_id', V.state.user.id).in('status', ['pago', 'em_atelier', 'enviado', 'entregue']);
+      if (error) return null;
+      for (const o of data || []) for (const i of o.order_items || []) if (i.products?.slug === slug) return i.size || '';
+      return null;
+    },
+    async saveReview(r) {
+      const row = { product_slug: r.slug, rating: r.rating, body: r.body || null, photos: r.photos || [], fit: r.fit || null, size_bought: r.size || null };
+      const { error } = r.id ? await V.sb.from('reviews').update(row).eq('id', r.id) : await V.sb.from('reviews').insert(row);
+      if (error) throw error;
+      delete cache.ratings;
+    },
+    // reduz a foto no aparelho (máx. 1600px, JPEG) antes de enviar
+    async uploadReviewPhoto(file) {
+      const bmp = await createImageBitmap(file).catch(() => null);
+      let blob = file;
+      if (bmp) {
+        const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+        const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+        c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+        blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.84));
+      }
+      const path = `${V.state.user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`;
+      const { error } = await V.sb.storage.from('reviews').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' });
+      if (error) throw error;
+      return V.sb.storage.from('reviews').getPublicUrl(path).data.publicUrl;
+    },
+
     async newsletter(email) {
       if (!V.sb) return;
       const { error } = await V.sb.from('newsletter').insert({ email });

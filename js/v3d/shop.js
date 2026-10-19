@@ -4,6 +4,7 @@
 import { $, $$, esc, money, CAT_NAME, PIX, HEART, waLink, toast, haptic, local, favs, mySize } from './common.js';
 import { mountSizer, mountFrete, loadMeasures, sizeCalc } from './atelier.js';
 import { pixReady, pixPayload, pixQrSvg } from './pix.js';
+import { createReviews } from './reviews.js';
 const PAYCFG = (window.VELLURE_CONFIG || {}).PAYMENTS || {};
 export { money, CAT_NAME, waLink, toast };
 
@@ -14,6 +15,12 @@ export function createShop({ catalog, lock, unlock, chime }) {
   let bag = local.get('vellure_sacola', []).filter((x) => bySlug.has(x.slug));
   let current = null, size = null, imgI = 0, view = 'list', ship = null;
 
+  /* ---------------- estoque por tamanho ---------------- */
+  const LOW = 3;
+  const left = (p, s) => (p && p.stock && s in p.stock ? p.stock[s] : null); // null = sem controle
+  const soldOut = (p) => !!p.stock && p.sizes.every((s) => left(p, s) === 0);
+  const reviews = createReviews({ catalog, lock, unlock });
+
   /* ---------------- closet (grade) ---------------- */
   const grid = $('#grid');
   let gridFilter = 'all';
@@ -22,14 +29,15 @@ export function createShop({ catalog, lock, unlock, chime }) {
     const list = catalog.filter((p) => filter === 'all' || (filter === 'mine' ? mySize.fits(p) : p.cat === filter));
     grid.innerHTML = list.length ? list.map((p) => { const mine = mySize.fits(p); return `
       <article class="card${mine ? ' mine' : ''}" data-slug="${esc(p.slug)}">
-        ${mine ? `<span class="mine-tag"><i></i>${mine === 'Único' ? 'Tamanho único, serve em você' : `Tem o seu tamanho ${esc(mine)}`}</span>` : ''}
+        ${mine ? `<span class="mine-tag${left(p, mine) === 0 ? ' wait' : ''}"><i></i>${left(p, mine === 'Único' ? p.sizes[0] : mine) === 0 ? `Seu ${mine === 'Único' ? 'tamanho' : esc(mine)} volta em breve` : mine === 'Único' ? 'Tamanho único, serve em você' : `Tem o seu tamanho ${esc(mine)}`}</span>` : ''}
         <div class="card-media" role="button" tabindex="0" aria-label="Ver ${esc(p.name)}">
           <img class="a" src="${esc(p.imgs[0])}" alt="${esc(p.name)} ${esc(p.color)}" loading="lazy" decoding="async">
           ${p.imgs[1] ? `<img class="b" src="${esc(p.imgs[1])}" alt="" loading="lazy" decoding="async">` : ''}
+          ${soldOut(p) ? '<span class="out-tag">Esgotada · avise-me</span>' : ''}
           <button class="card-add" type="button">Ver tamanhos</button>
         </div>
         <button class="fav card-fav" type="button" aria-pressed="${favs.has(p.slug)}" aria-label="Favoritar ${esc(p.name)}">${HEART}</button>
-        <div class="card-info"><h3 class="card-name">${esc(p.name)}<span class="card-color">${esc(p.color || CAT_NAME[p.cat])}</span></h3><span class="card-price">${money(p.price)}</span></div>
+        <div class="card-info"><h3 class="card-name">${esc(p.name)}<span class="card-color">${esc(p.color || CAT_NAME[p.cat])}</span></h3><span class="card-side"><span class="card-price">${money(p.price)}</span><span class="card-rate" data-rate="${esc(p.slug)}">${reviews.badge(p.slug)}</span></span></div>
       </article>`; }).join('') : `<p class="vs-empty">${filter === 'mine' ? 'Nenhuma peça no seu tamanho gravado por enquanto. Fale com a concierge: pedimos sob encomenda.' : 'Nenhuma peça nesta categoria por enquanto.'}</p>`;
     if (window.gsap && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       gsap.fromTo(grid.children, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 1, stagger: 0.035, ease: 'expo.out' });
@@ -63,11 +71,81 @@ export function createShop({ catalog, lock, unlock, chime }) {
     return p.sizes.slice().sort((a, b) => Math.abs(order.indexOf(a) - wi) - Math.abs(order.indexOf(b) - wi))[0];
   }
   function paintSizes() {
-    $('#pdpSizes').innerHTML = current.sizes.map((s) => `<button type="button" aria-pressed="${s === size}">${esc(s)}</button>`).join('');
+    $('#pdpSizes').innerHTML = current.sizes.map((s) => {
+      const n = left(current, s), low = n !== null && n > 0 && n <= LOW;
+      return `<button type="button" data-size="${esc(s)}" aria-pressed="${s === size}" class="${n === 0 ? 'out' : low ? 'low' : ''}" aria-label="Tamanho ${esc(s)}${n === 0 ? ', esgotado' : low ? `, últimas ${n}` : ''}">${esc(s)}${low ? `<i>${n}</i>` : ''}</button>`;
+    }).join('');
+    paintStock();
     const mine = suggest(current);
     const el = $('#pdpMine');
     if (mine && current.sizes.length > 1) { el.hidden = false; el.innerHTML = mySize.fits(current) ? `Esta peça tem o seu tamanho gravado: <b>${esc(mine)}</b>. Já deixamos marcado.` : `Pelas suas medidas, o seu é o <b>${esc(mine)}</b>.`; } else el.hidden = true;
   }
+
+  /* status do tamanho escolhido + "avise-me quando chegar" */
+  const addBtn = $('#pdpAdd'), alertF = $('#pdpAlert');
+  const avisos = () => local.get('vellure_avisos', []);
+  function paintStock() {
+    const n = size ? left(current, size) : null, st = $('#pdpStock');
+    const asked = avisos().some((a) => a.slug === current.slug && a.size === size);
+    st.className = 'pdp-stock';
+    if (size && n === 0) {
+      st.hidden = false; st.classList.add('out');
+      st.innerHTML = asked ? `Você já está na lista do <b>${esc(size)}</b>. Avisamos assim que voltar.` : `O <b>${esc(size)}</b> esgotou por enquanto. As outras medidas seguem disponíveis.`;
+      addBtn.textContent = asked ? 'Você será avisada' : 'Avise-me quando chegar'; addBtn.dataset.mode = 'alert'; addBtn.disabled = asked;
+    } else {
+      if (n !== null && n > 0 && n <= LOW) { st.hidden = false; st.classList.add('low'); st.innerHTML = n === 1 ? `<i></i>Última peça no ${esc(size)}.` : `<i></i>Só ${n} peças no ${esc(size)}.`; }
+      else st.hidden = true;
+      addBtn.textContent = 'Colocar na sacola'; delete addBtn.dataset.mode; addBtn.disabled = false;
+      alertF.hidden = true;
+    }
+  }
+  function openAlert() {
+    const u = window.V?.state?.user, prof = window.V?.state?.profile || {};
+    $('#paSize').textContent = size;
+    if (u && !alertF.email.value) alertF.email.value = u.email || '';
+    if (prof.phone && !alertF.phone.value) alertF.phone.value = prof.phone;
+    $('#paMsg').textContent = '';
+    alertF.hidden = false;
+    window.gsap && gsap.fromTo(alertF, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out' });
+    setTimeout(() => (alertF.email.value ? alertF.phone : alertF.email).focus({ preventScroll: true }), 60);
+    alertF.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  alertF.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = alertF.email.value.trim(), phone = alertF.phone.value.replace(/\D/g, ''), msg = $('#paMsg');
+    if (!email && !phone) { msg.textContent = 'Deixe um e-mail ou um WhatsApp para a gente te avisar.'; return; }
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg.textContent = 'Confira o e-mail.'; return; }
+    if (phone && (phone.length < 10 || phone.length > 13)) { msg.textContent = 'Confira o WhatsApp com DDD.'; return; }
+    const btn = alertF.querySelector('button'); btn.disabled = true; btn.textContent = 'Guardando…';
+    const p = current, sz = size;
+    const done = (txt) => {
+      local.set('vellure_avisos', [...avisos().filter((a) => !(a.slug === p.slug && a.size === sz)), { slug: p.slug, size: sz, at: Date.now() }]);
+      alertF.hidden = true; btn.disabled = false; btn.textContent = 'Quero ser avisada';
+      if (current === p) paintStock();
+      toast(txt); haptic(18); chime && chime(1.8);
+    };
+    try {
+      if (!window.V?.sb) throw Object.assign(new Error('offline'), { offline: true });
+      const r = await window.V.api.stockAlert(p.slug, sz, email, phone);
+      done(r?.waiting > 1 ? `Combinado. Você e mais ${r.waiting - 1} estão esperando o ${sz}.` : `Combinado. Assim que o ${sz} voltar, você é a primeira a saber.`);
+    } catch (err) {
+      const m = String(err?.message || err);
+      if (err?.offline || /function|schema cache|does not exist|Failed to fetch/i.test(m)) {
+        // banco ainda não instalado: o pedido de aviso vai para a concierge
+        window.open(waLink(`Olá, Vellure! Quero ser avisada quando a peça ${p.name}${p.color ? ` (${p.color})` : ''} voltar no tamanho ${sz}.${email ? ` E-mail: ${email}.` : ''}`), '_blank', 'noopener');
+        done('Pedido de aviso enviado para a concierge.');
+      } else { msg.textContent = m; btn.disabled = false; btn.textContent = 'Quero ser avisada'; }
+    }
+  });
+  $('#paClose').addEventListener('click', () => { alertF.hidden = true; });
+  // voltou? avisa quem pediu neste aparelho
+  setTimeout(() => {
+    const back = avisos().filter((a) => { const p = bySlug.get(a.slug); return p && left(p, a.size) > 0; });
+    if (!back.length) return;
+    const p = bySlug.get(back[0].slug);
+    toast(`Boa notícia: ${p.name} voltou no ${back[0].size}.`);
+    local.set('vellure_avisos', avisos().filter((a) => !back.includes(a)));
+  }, 9000);
 
   /* ---------------- página da peça ---------------- */
   const pdp = $('#pdp'), stage = $('#pdpStage'), thumbs = $('#pdpThumbs');
@@ -90,6 +168,7 @@ export function createShop({ catalog, lock, unlock, chime }) {
     stage.innerHTML = p.imgs.map((src, i) => `<img src="${esc(src)}" alt="${esc(p.name)}, foto ${i + 1}" ${i ? 'loading="lazy"' : ''}>`).join('');
     thumbs.innerHTML = p.imgs.length > 1 ? p.imgs.map((src, i) => `<button type="button" aria-label="Foto ${i + 1}"><img src="${esc(src)}" alt="" loading="lazy"></button>`).join('') : '';
     paintSizes();
+    reviews.show(p);
     const more = catalog.filter((x) => x.cat === p.cat && x.slug !== p.slug).sort(() => Math.random() - 0.5).slice(0, 3);
     $('#pdpMore').innerHTML = more.map((x) => `<button type="button" data-slug="${esc(x.slug)}"><img src="${esc(x.imgs[0])}" alt="" loading="lazy"><span>${esc(x.name)}<br>${money(x.price)}</span></button>`).join('');
     setImg(0);
@@ -118,18 +197,21 @@ export function createShop({ catalog, lock, unlock, chime }) {
   stage.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; }, { passive: true });
   stage.addEventListener('touchend', (e) => { if (sx === null) return; const dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 40) setImg(imgI + (dx < 0 ? 1 : -1)); sx = null; });
   $('#pdpSizes').addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return; size = b.textContent; haptic(8);
+    const b = e.target.closest('button'); if (!b) return; size = b.dataset.size; haptic(8);
     $('#pdpSizes').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    paintStock();
   });
   $('#pdpMore').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) open(b.dataset.slug, false); });
   $('#pdpFav').addEventListener('click', async (e) => { const on = await favs.toggle(current.slug); e.currentTarget.setAttribute('aria-pressed', String(on)); haptic(); toast(on ? 'Guardada nos seus favoritos.' : 'Removida dos favoritos.'); });
   $('#pdpAdd').addEventListener('click', () => {
+    if (addBtn.dataset.mode === 'alert') { openAlert(); return; }
     if (!size) {
       toast('Escolha um tamanho para continuar.');
       window.gsap && gsap.fromTo('#pdpSizes', { x: -8 }, { x: 0, duration: 0.6, ease: 'elastic.out(1, .3)' });
       return;
     }
-    add(current.slug, size); close(); openBag();
+    if (add(current.slug, size) === false) return;
+    close(); openBag();
   });
   $('#pdpShare').addEventListener('click', async () => {
     const url = `${location.href.split('#')[0]}#peca/${current.slug}`, title = `${current.name} | Vellure`;
@@ -162,7 +244,8 @@ export function createShop({ catalog, lock, unlock, chime }) {
   const bagEl = $('#bag'), scrim = $('.scrim');
   function save() { local.set('vellure_sacola', bag); $('#bagCount').textContent = bag.reduce((a, x) => a + x.qty, 0); }
   function add(slug, sz) {
-    const it = bag.find((x) => x.slug === slug && x.size === sz);
+    const it = bag.find((x) => x.slug === slug && x.size === sz), n = left(bySlug.get(slug), sz);
+    if (n !== null && (it ? it.qty : 0) + 1 > n) { toast(n ? `Temos só ${n} no ${sz}, e já estão na sua sacola.` : `O ${sz} esgotou.`); return false; }
     if (it) it.qty++; else bag.push({ slug, size: sz, qty: 1 });
     save(); renderBag();
     const b = $('#bagBtn'); b.classList.add('bump'); setTimeout(() => b.classList.remove('bump'), 500);
@@ -313,7 +396,12 @@ export function createShop({ catalog, lock, unlock, chime }) {
   $('#bagItems').addEventListener('click', (e) => {
     const row = e.target.closest('.bag-item'); if (!row) return; const i = +row.dataset.i;
     if (e.target.closest('.rm')) bag.splice(i, 1);
-    const q = e.target.closest('[data-q]'); if (q) { bag[i].qty += +q.dataset.q; if (bag[i].qty < 1) bag.splice(i, 1); }
+    const q = e.target.closest('[data-q]');
+    if (q) {
+      const n = left(bySlug.get(bag[i].slug), bag[i].size);
+      if (+q.dataset.q > 0 && n !== null && bag[i].qty + 1 > n) { toast(n === 1 ? `É a última peça no ${bag[i].size}.` : `Temos só ${n} no ${bag[i].size}.`); return; }
+      bag[i].qty += +q.dataset.q; if (bag[i].qty < 1) bag.splice(i, 1);
+    }
     save(); renderBag(); freteBox && freteBox.recalc();
   });
   $('#bagFoot').addEventListener('click', (e) => {

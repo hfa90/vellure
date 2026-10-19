@@ -21,6 +21,9 @@ HTML, CSS e JavaScript puros (módulos ES), Three.js r160, GSAP e Lenis, tudo se
 | Meu tamanho gravado: destaque dourado na galeria e no closet, filtro "No meu tamanho" | `js/v3d/common.js` (mySize), `js/v3d/atelier.js` |
 | Modo claro premium (pérola rosada) e modo escuro, com a cena 3D acompanhando | `js/theme.js`, `css/v3d.css` |
 | Checkout com Pix (QR Code e copia e cola com valor exato) e dinheiro na entrega; cartão desativado | `js/v3d/pix.js`, `js/v3d/shop.js`, `js/config.js` → `PAYMENTS` |
+| Estoque por tamanho (esgotado, "últimas unidades", limite na sacola e no pedido) | `js/v3d/shop.js`, `supabase/estoque_avaliacoes.sql` |
+| Avise-me quando chegar: fila por tamanho, aviso pronto quando o tamanho volta | `js/v3d/shop.js`, painel → Avise-me |
+| Avaliações com foto, só de quem comprou, com moderação e resposta da Maison | `js/v3d/reviews.js`, painel → Avaliações |
 | Busca instantânea (tecla /), cupom, vistos recentemente, compartilhar peça, concierge flutuante | `js/v3d/main.js`, `js/v3d/shop.js` |
 | Privacidade (LGPD), políticas de trocas e entregas, SEO (sitemap, robots, dados estruturados) | `js/lgpd.js`, `politicas.html`, `sitemap.xml`, `robots.txt` |
 | App instalável no iPhone e Android (PWA) | `manifest.webmanifest`, `sw.js`, `assets/icons/` |
@@ -49,7 +52,11 @@ HTML, CSS e JavaScript puros (módulos ES), Three.js r160, GSAP e Lenis, tudo se
 5. **Box Misteriosa VIP:** rode `supabase/assinatura_vip.sql` no SQL Editor (cria os 6 planos e ajusta a cobrança por frequência). Preços, benefícios e dia de envio ficam em `js/config.js` → `VIP`.
    - **Cobrança recorrente:** no Mercado Pago, em *Seu negócio → Assinaturas → Criar plano*, crie um plano para cada combinação (Essencial e Duo × mensal, trimestral, semestral), copie o link de checkout de cada um e cole em `VIP.PAY_LINKS`. Enquanto estiver vazio, a assinatura é registrada e a concierge envia o pagamento pelo WhatsApp.
    - Pausar, pular mês e cancelar na área da cliente atualizam a assinatura no Supabase. Se o plano estiver no Mercado Pago, faça o mesmo ajuste lá (ou peça para automatizarmos com uma Edge Function e o webhook do Mercado Pago).
-6. **Publicar:** GitHub Pages servindo a branch `main` na raiz. A loja fica em `https://hfa90.github.io/vellure/`.
+6. **Estoque por tamanho, Avise-me e Avaliações:** rode `supabase/estoque_avaliacoes.sql` no SQL Editor (depois dos anteriores). Ele reparte o estoque atual de cada peça entre os tamanhos, cria a lista de espera, as avaliações e o espaço para as fotos delas.
+   - **Estoque:** no painel, em Produtos, cada peça tem a grade por tamanho (com + e −). O total é a soma. Pedido cancelado devolve as peças ao tamanho certo.
+   - **Avise-me:** quando um tamanho esgota, a loja troca o botão por "Avise-me quando chegar". Ao repor o tamanho (no produto ou direto na aba Avise-me), a fila fica pronta: avise pelo WhatsApp de cada cliente ou copie os e-mails em cópia oculta, e marque como avisadas. Para o aviso sair sozinho por e-mail, dá para ligar uma Edge Function com o seu SMTP.
+   - **Avaliações:** só clientes com pedido pago daquela peça conseguem avaliar (o banco confere). Toda avaliação entra como "para revisar" e só aparece na loja depois que você aprova. A nota média vai para o Google junto com os dados da peça.
+7. **Publicar:** GitHub Pages servindo a branch `main` na raiz. A loja fica em `https://hfa90.github.io/vellure/`.
 
 ## Desempenho e acessibilidade
 
